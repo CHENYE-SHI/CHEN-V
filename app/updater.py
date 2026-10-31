@@ -7,6 +7,7 @@
 
 所有网络请求都走短超时 + 后台线程，绝不阻塞主界面；失败一律静默回退为「本地版」。
 """
+import base64
 import json
 import threading
 import time
@@ -20,6 +21,12 @@ GITHUB_OWNER = "CHENYE-SHI"
 GITHUB_REPO = "CHEN-V"
 
 _RELEASES_API = "https://api.github.com/repos/%s/%s/releases/latest" % (GITHUB_OWNER, GITHUB_REPO)
+# 公告的多个源（国内网络下 raw.githubusercontent 经常超时，所以按可靠性排序依次尝试）
+_ANNOUNCE_API = "https://api.github.com/repos/%s/%s/contents/announce.json" % (GITHUB_OWNER, GITHUB_REPO)
+_ANNOUNCE_JSDELIVR = [
+    "https://cdn.jsdelivr.net/gh/%s/%s@main/announce.json" % (GITHUB_OWNER, GITHUB_REPO),
+    "https://fastly.jsdelivr.net/gh/%s/%s@main/announce.json" % (GITHUB_OWNER, GITHUB_REPO),
+]
 _ANNOUNCE_RAW = "https://raw.githubusercontent.com/%s/%s/main/announce.json" % (GITHUB_OWNER, GITHUB_REPO)
 # 下载页（点「去下载」跳转到这里）
 _RELEASES_PAGE = "https://github.com/%s/%s/releases" % (GITHUB_OWNER, GITHUB_REPO)
@@ -29,18 +36,44 @@ _PROJECT_PAGE = "https://github.com/%s/%s" % (GITHUB_OWNER, GITHUB_REPO)
 _TIMEOUT = 8  # 秒；联网失败不能拖慢启动/响应
 
 
-def _http_get_json(url):
+def _http_get_json(url, timeout=None):
     """GET 并解析 JSON，失败返回 None。"""
     req = urllib.request.Request(url, headers={
         "User-Agent": "CHEN-V-updater/1.0",
         "Accept": "application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
+        with urllib.request.urlopen(req, timeout=timeout or _TIMEOUT) as r:
             data = r.read().decode("utf-8", "replace")
         return json.loads(data)
     except Exception:
         return None
+
+
+def _fetch_announce():
+    """按可靠性依次尝试多个源拿公告 JSON。
+
+    顺序：GitHub API（最快最稳）→ jsDelivr（国内多线）→ raw（可能被墙）。
+    任一成功即返回；全部失败返回 None。
+    """
+    # 1) GitHub Contents API：返回 base64 包裹的内容
+    d = _http_get_json(_ANNOUNCE_API, timeout=6)
+    if isinstance(d, dict) and d.get("content"):
+        try:
+            raw = base64.b64decode(d["content"]).decode("utf-8", "replace")
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+    # 2) jsDelivr CDN
+    for u in _ANNOUNCE_JSDELIVR:
+        obj = _http_get_json(u, timeout=6)
+        if isinstance(obj, dict):
+            return obj
+    # 3) raw.githubusercontent（兜底）
+    obj = _http_get_json(_ANNOUNCE_RAW, timeout=6)
+    return obj if isinstance(obj, dict) else None
 
 
 def _http_get_text(url):
@@ -127,9 +160,9 @@ def check_updates(local_ver, on_done, want_announce=True, lang="zh-CN"):
             st.has_update = is_newer(st.latest_ver, local_ver)
         else:
             st.error = "no_release"
-        # 2) 公告
+        # 2) 公告（多源兜底：API → jsDelivr → raw）
         if want_announce:
-            ann = _http_get_json(_ANNOUNCE_RAW)
+            ann = _fetch_announce()
             if ann and isinstance(ann, dict):
                 st.announce = ann
                 # 优先取当前语言文案，缺省回退默认字段
