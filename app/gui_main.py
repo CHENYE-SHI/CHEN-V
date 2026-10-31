@@ -2206,6 +2206,10 @@ class MainWindow(QMainWindow):
         self.lbl_update_state.style().polish(self.lbl_update_state)
 
         local_ver = APP_VERSION.lstrip("Vv")
+        try:
+            lang_code = self.cb_lang.currentData() or "zh-CN"
+        except Exception:
+            lang_code = "zh-CN"
 
         def _done(st):
             # 回到主线程再刷新控件
@@ -2213,7 +2217,7 @@ class MainWindow(QMainWindow):
                 self._apply_update_state(st)
             QTimer.singleShot(0, _apply)
 
-        updater.check_updates(local_ver, _done)
+        updater.check_updates(local_ver, _done, lang=lang_code)
 
     def _apply_update_state(self, st):
         """把检查结果写回界面（必须在主线程调用）。"""

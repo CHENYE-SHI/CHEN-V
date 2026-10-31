@@ -1,0 +1,30 @@
+name: Release
+
+# 当推送以 v 开头的 tag（如 v1.02）时，自动基于 tag 创建/更新 GitHub Release。
+# 说明：本仓库体积巨大的运行时（runtime/models/vrt/ffmpeg）不纳入 git，
+# 成品压缩包请由作者在本地打包后手动上传到对应 Release。
+# 此工作流只负责「打 tag → 自动建 Release 条目」，让程序的「检查更新」能读到版本号。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "CHEN-V ${{ github.ref_name }}"
+          draft: true
+          generate_release_notes: true
+          files: |
+            announce.json

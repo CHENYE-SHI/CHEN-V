@@ -102,11 +102,12 @@ class UpdateState:
         self.error = None              # 出错信息（成功为 None）
 
 
-def check_updates(local_ver, on_done, want_announce=True):
+def check_updates(local_ver, on_done, want_announce=True, lang="zh-CN"):
     """后台检查更新 + 公告，完成后回主线程调用 on_done(state)。
 
     local_ver: 当前版本号（不含 V，如 '1.00'）
     on_done:  回调，在后台线程调用；调用方自行调度回主线程
+    lang:     公告优先取该语言文案（announce.json 的 lang 字段），缺省回退默认 title/body
     """
     def _work():
         st = UpdateState()
@@ -125,13 +126,17 @@ def check_updates(local_ver, on_done, want_announce=True):
             ann = _http_get_json(_ANNOUNCE_RAW)
             if ann and isinstance(ann, dict):
                 st.announce = ann
-                st.announce_title = ann.get("title") or ""
-                st.announce_body = ann.get("body") or ""
-                # 支持按语言取文案；缺省回退默认字段
-                lang = ann.get("lang", {})
-                if isinstance(lang, dict):
-                    # lang 形如 {"zh-CN": {"title":..,"body":..}, "en": ...}
-                    pass
+                # 优先取当前语言文案，缺省回退默认字段
+                title = ann.get("title") or ""
+                body = ann.get("body") or ""
+                lang_map = ann.get("lang") or {}
+                if isinstance(lang_map, dict):
+                    cur = lang_map.get(lang)
+                    if isinstance(cur, dict):
+                        title = cur.get("title") or title
+                        body = cur.get("body") or body
+                st.announce_title = title
+                st.announce_body = body
         if not st.error and st.latest_ver is None:
             st.error = "network"
         try:
