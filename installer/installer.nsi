@@ -12,7 +12,7 @@ RequestExecutionLevel admin          ; 完整包约 3.3GB，建议管理员权�
 
 ; --- 程序元信息 ---
 !define APP_NAME "CHEN-V"
-!define APP_VERSION "1.00"
+!define APP_VERSION "1.01"
 !define APP_PUBLISHER "辰师"
 !define APP_EXE "CHEN-V.exe"
 !define APP_URL "https://github.com/CHENYE-SHI/CHEN-V"

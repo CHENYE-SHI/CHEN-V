@@ -140,8 +140,8 @@ def _i18n_label(text, key, object_name="hint", wrap=True):
 
 
 APP_NAME = "CHEN-V"
-APP_VERSION = "V1.00"
-BUILD = "2026.10.28"
+APP_VERSION = "V1.01"
+BUILD = "2026.10.31"
 SETTINGS_FILE = os.path.join(paths.APP_DIR, "settings_qt.json")
 PRESETS_DIR = os.path.join(paths.APP_DIR, "presets")
 

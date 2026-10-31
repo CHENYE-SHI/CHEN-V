@@ -41,6 +41,15 @@ dist/
 /installer/assets/
 /installer/*.bmp
 
+# ===== 自研安装器（单文件直装）=====
+/CHEN-V_Setup.exe
+/CHEN-V_Setup.exe.config
+/CHEN-V_Setup.pdb
+/dist/
+# C# 安装程序的编译输出（只保留源码与资源）
+/installer_py/bootstrapper/bin/
+/installer_py/bootstrapper/obj/
+
 # ===== 系统/编辑器 =====
 .idea/
 .vscode/
