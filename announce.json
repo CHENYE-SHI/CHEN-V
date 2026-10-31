@@ -1,18 +1,4 @@
 {
-  "title": "CHEN-V 现已开源",
-  "body": "大家好，CHEN-V 的源码已经发布到 GitHub 啦。\n\n欢迎 Star、提 Issue 反馈问题、参与改进。\n后续版本更新也会在这里发布，记得常来看看。",
-  "lang": {
-    "zh-CN": {
-      "title": "CHEN-V 现已开源",
-      "body": "大家好，CHEN-V 的源码已经发布到 GitHub 啦。\n\n欢迎 Star、提 Issue 反馈问题、参与改进。\n后续版本更新也会在这里发布，记得常来看看。"
-    },
-    "en": {
-      "title": "CHEN-V is now open source",
-      "body": "Hi! The source code of CHEN-V is now on GitHub.\n\nStar, open issues, and contribute. New releases will be announced here too."
-    }
-  }
-}
-{
     "title": "CHEN-V 更新 1.01",
     "body": "CHEN-V 更新到 V1.01 啦。\n本次更新修复了一些问题、优化了体验。\n记得更新后重启程序，祝使用愉快。",
     "lang": {
