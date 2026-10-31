@@ -1,0 +1,43 @@
+# ===== 运行时与依赖（体积巨大，不纳入版本库；通过 Release 发布）=====
+/runtime/
+/models/
+/vrt/
+/ffmpeg/
+
+# ===== 运行时生成的临时/缓存/输出 =====
+/work/
+/logs/
+*.log
+
+# ===== 完整性清单（发布前由作者生成，不入库以免每次改代码哈希对不上）=====
+/app/manifest.json
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec
+
+# ===== 本地设置（含个人路径，不入库）=====
+/app/settings.json
+/app/settings_qt.json
+/app/presets/*.json
+!app/presets/.gitkeep
+
+# ===== 个人隐私与收款码（不入库）=====
+/assets/support_alipay.jpg
+/assets/support_wechat.png
+.workbuddy/
+
+# ===== 编译产物（通过 Release 分发，不入源码库）=====
+/CHEN-V.exe
+
+# ===== 系统/编辑器 =====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp

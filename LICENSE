@@ -1,0 +1,35 @@
+MIT License
+
+Copyright (c) 2026 CHEN-V
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## 附加说明（Additional Notice）
+
+本项目本体（`app/` 目录下的代码）采用 MIT License 授权。你可以在遵守上述许可的前提下
+使用、修改、转载与分享本软件，但请勿将本软件或其直接改版用于收费转卖。
+
+The core of this project (code under `app/`) is licensed under the MIT License,
+but please do not resell this software or its direct derivatives for profit.
+
+本软件内嵌的第三方模型与组件（Real-ESRGAN、Real-CUGAN、RIFE ncnn、FFmpeg、
+VapourSynth、TensorRT 等）各自遵循其原始许可协议，其著作权归原作者所有。
+详见程序「关于 → 第三方软件声明」及 `vrt/licenses/` 目录。
