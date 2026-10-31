@@ -846,6 +846,8 @@ class _ClickLabel(QLabel):
 class MainWindow(QMainWindow):
     # 硬件采集完成信号（后台线程 emit，自动走 QueuedConnection 回主线程）
     hw_ready = Signal(list)
+    # 更新检查完成信号（后台线程 emit，回主线程刷新更新页）
+    update_ready = Signal(object)
 
     def __init__(self, tick=None, boot_qss=None):
         super().__init__()
@@ -1006,6 +1008,7 @@ class MainWindow(QMainWindow):
         self.timer.start(120)
 
         self.hw_ready.connect(self._on_hw_ready)
+        self.update_ready.connect(self._apply_update_state)
 
         self._center()
 
@@ -2180,6 +2183,9 @@ class MainWindow(QMainWindow):
         b_bili.clicked.connect(lambda: self._open_bilibili())
         b_group = QPushButton("加入聊群")
         b_group.clicked.connect(lambda: self._show_group_dialog())
+        b_github = QPushButton("GitHub 官网")
+        b_github.setToolTip("打开 CHEN-V 的 GitHub 项目主页（源码、更新日志、提 Issue）")
+        b_github.clicked.connect(lambda: self._open_github())
         b_support = QPushButton("支持 CHEN-V", objectName="primary")
         b_support.setToolTip("作者独立开发、全部功能免费；如果它帮到了你，可以自愿支持一下")
         b_support.clicked.connect(lambda: self._show_support_dialog())
@@ -2187,6 +2193,7 @@ class MainWindow(QMainWindow):
         h.addWidget(self.b_check)
         h.addWidget(b_bili)
         h.addWidget(b_group)
+        h.addWidget(b_github)
         h.addWidget(b_support)
         h.addStretch(1)
         card.v.addLayout(h)
@@ -2212,10 +2219,8 @@ class MainWindow(QMainWindow):
             lang_code = "zh-CN"
 
         def _done(st):
-            # 回到主线程再刷新控件
-            def _apply():
-                self._apply_update_state(st)
-            QTimer.singleShot(0, _apply)
+            # 通过信号回主线程刷新控件（QTimer.singleShot 从后台线程调用不可靠）
+            self.update_ready.emit(st)
 
         updater.check_updates(local_ver, _done, lang=lang_code)
 
@@ -2366,6 +2371,12 @@ class MainWindow(QMainWindow):
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
         QDesktopServices.openUrl(QUrl("https://b23.tv/X2FYRsA"))
+
+    def _open_github(self):
+        """在系统默认浏览器打开 CHEN-V 的 GitHub 项目主页。"""
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl(updater.project_page_url()))
 
     def _build_settings_page(self):
         scroll = QScrollArea()

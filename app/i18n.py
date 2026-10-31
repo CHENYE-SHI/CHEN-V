@@ -544,6 +544,11 @@ _T = {
     "已选择 %d 个素材": {"zh-TW": "已選擇 %d 個素材", "en": "%d items selected", "ja": "素材 %d 件を選択"},
     "构建：%s": {"zh-TW": "構建：%s", "en": "Build: %s", "ja": "ビルド：%s"},
     "哔哩哔哩主页": {"zh-TW": "嗶哩嗶哩主頁", "en": "bilibili page", "ja": "bilibili ページ"},
+    "GitHub 官网": {"zh-TW": "GitHub 官網", "en": "GitHub", "ja": "GitHub"},
+    "打开 CHEN-V 的 GitHub 项目主页（源码、更新日志、提 Issue）": {
+        "zh-TW": "開啟 CHEN-V 的 GitHub 專案主頁（原始碼、更新日誌、回報 Issue）",
+        "en": "Open the CHEN-V GitHub project page (source code, changelog, report an issue)",
+        "ja": "CHEN-V の GitHub プロジェクトページを開く（ソースコード、更新履歴、Issue 報告）"},
     "字体描边": {"zh-TW": "字體描邊", "en": "Text outline", "ja": "文字の縁取り"},
     "数值越大，文字描边越明显，背景复杂时更清晰（0=关闭）": {
         "zh-TW": "數值越大，文字描邊越明顯，背景複雜時更清晰（0=關閉）",

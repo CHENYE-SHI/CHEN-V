@@ -5,7 +5,7 @@
 CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本地视频画质增强工具，支持视频 / 图片 / 批量队列 / 图片序列输出，内置 ncnn（Vulkan）与 TensorRT 加速内核。
 
 <p align="center">
-  <img src="assets/icon.png" width="128" alt="CHEN-V logo">
+  <img src="app/icon.png" width="128" alt="CHEN-V logo">
 </p>
 
 ## 功能特性

@@ -23,6 +23,8 @@ _RELEASES_API = "https://api.github.com/repos/%s/%s/releases/latest" % (GITHUB_O
 _ANNOUNCE_RAW = "https://raw.githubusercontent.com/%s/%s/main/announce.json" % (GITHUB_OWNER, GITHUB_REPO)
 # 下载页（点「去下载」跳转到这里）
 _RELEASES_PAGE = "https://github.com/%s/%s/releases" % (GITHUB_OWNER, GITHUB_REPO)
+# 项目主页
+_PROJECT_PAGE = "https://github.com/%s/%s" % (GITHUB_OWNER, GITHUB_REPO)
 
 _TIMEOUT = 8  # 秒；联网失败不能拖慢启动/响应
 
@@ -53,6 +55,10 @@ def _http_get_text(url):
 
 def releases_page_url():
     return _RELEASES_PAGE
+
+
+def project_page_url():
+    return _PROJECT_PAGE
 
 
 def _strip_v(tag):

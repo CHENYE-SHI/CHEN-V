@@ -30,10 +30,16 @@ dist/
 # ===== 个人隐私与收款码（不入库）=====
 /assets/support_alipay.jpg
 /assets/support_wechat.png
+/assets/join_group.jpg
 .workbuddy/
 
 # ===== 编译产物（通过 Release 分发，不入源码库）=====
 /CHEN-V.exe
+
+# ===== 安装包产物（大体积，不进源码库；NSIS 脚本保留）=====
+/installer/*.exe
+/installer/assets/
+/installer/*.bmp
 
 # ===== 系统/编辑器 =====
 .idea/

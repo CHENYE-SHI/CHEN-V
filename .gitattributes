@@ -1,0 +1,11 @@
+# 让 GitHub 的语言统计更准确：命令行.bat 只是启动脚本，不计入语言占比
+命令行.bat linguist-vendored
+*.bat linguist-vendored
+
+# 统一换行符，避免 CRLF 告警
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.nsi text eol=lf
