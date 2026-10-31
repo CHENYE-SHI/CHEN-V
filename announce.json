@@ -12,3 +12,17 @@
     }
   }
 }
+{
+    "title": "CHEN-V 更新 1.01",
+    "body": "CHEN-V 更新到 V1.01 啦。\n本次更新修复了一些问题、优化了体验。\n记得更新后重启程序，祝使用愉快。",
+    "lang": {
+        "zh-CN": {
+            "title": "CHEN-V 更新 1.01",
+            "body": "CHEN-V 更新到 V1.01 啦。\n本次更新修复了一些问题、优化了体验。\n记得更新后重启程序，祝使用愉快。"
+        },
+        "en": {
+            "title": "CHEN-V updated to 1.01",
+            "body": "CHEN-V has been updated to V1.01.\nThis update fixes issues and improves the experience.\nPlease restart the app after updating. Enjoy!"
+        }
+    }
+}
