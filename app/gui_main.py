@@ -1012,6 +1012,11 @@ class MainWindow(QMainWindow):
 
         self._center()
 
+        # 启动时把已保存的字体描边应用上。
+        # 之前只在「拖滑块 / 换背景」时才应用，重启后描边就没了（滑块还显示原值），
+        # 看起来像功能失灵。
+        self._apply_text_shadow(self.text_outline)
+
     # ------------------------------------------------------------ 设置
     def _load_settings(self):
         try:
@@ -1245,6 +1250,7 @@ class MainWindow(QMainWindow):
             outline = QColor(0, 0, 0)
         for w in root.findChildren(QLabel):
             if level <= 0:
+                # setGraphicsEffect(None) 时 Qt 会自行销毁旧 effect，不要再手动 delete
                 w.setGraphicsEffect(None)
                 continue
             sh = w.graphicsEffect()
@@ -3001,6 +3007,8 @@ class MainWindow(QMainWindow):
         self._update_color_swatches()
         self._sync_bg_mask()
         self._apply_titlebar_theme()
+        # 描边颜色随主题取反（浅色主题用白描边、深色主题用黑描边），换主题要重刷
+        self._apply_text_shadow(getattr(self, "text_outline", 0))
 
     def _apply_titlebar_theme(self):
         """让 Windows 原生标题栏跟随主题（深色主题用深色标题栏，消除白色标题栏）。"""
