@@ -6,8 +6,10 @@
 """
 import argparse
 import ctypes
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,6 +25,113 @@ except Exception:
     pass
 
 CORE = vs.core
+
+
+# ---------------------------------------------------------------------------
+# 模型路径的 ASCII 兜底
+#
+# ncnn / TensorRT 这些原生库在 Windows 上按 ANSI 打开文件，路径含中文
+# （例如装在 D:\测试\CHEN-V）时直接 "failed to load model"。
+# 这里把这类路径镜像到纯 ASCII 的缓存目录后再交给插件，用户装哪都能跑。
+# ---------------------------------------------------------------------------
+_ASCII_CACHE_ROOT = None
+
+
+def _ascii_cache_root():
+    global _ASCII_CACHE_ROOT
+    if _ASCII_CACHE_ROOT is not None:
+        return _ASCII_CACHE_ROOT
+    bases = [
+        os.environ.get("ProgramData"),
+        os.environ.get("PUBLIC"),
+        os.environ.get("SystemDrive", "C:") + "\\",
+        tempfile.gettempdir(),
+    ]
+    for b in bases:
+        if not b:
+            continue
+        cache = os.path.join(b, "CHEN-V", "model_cache")
+        try:
+            cache.encode("ascii")          # 缓存目录本身必须仍是 ASCII
+        except UnicodeEncodeError:
+            continue
+        try:
+            os.makedirs(cache, exist_ok=True)
+            probe = os.path.join(cache, ".w")
+            with open(probe, "w"):
+                pass
+            os.remove(probe)
+            _ASCII_CACHE_ROOT = cache
+            return cache
+        except Exception:
+            continue
+    _ASCII_CACHE_ROOT = ""
+    return ""
+
+
+def _dir_signature(path):
+    n = total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            n += 1
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return n, total
+
+
+def ascii_safe_path(p):
+    """模型路径含非 ASCII 字符时，镜像到 ASCII 缓存目录并返回缓存里的路径。
+
+    路径本来就是 ASCII 时原样返回（零开销，绝大多数人走这条路）。
+    """
+    if not p:
+        return p
+    p = os.path.abspath(str(p))
+    try:
+        p.encode("ascii")
+        return p
+    except UnicodeEncodeError:
+        pass
+
+    root = _ascii_cache_root()
+    if not root:
+        return p                            # 找不到可写缓存目录，只能原样交给插件
+    src_dir = p if os.path.isdir(p) else os.path.dirname(p)
+    if not os.path.isdir(src_dir):
+        return p
+
+    key = hashlib.md5(src_dir.encode("utf-8")).hexdigest()[:16]
+    dst_root = os.path.join(root, key)
+    # 注意：插件是靠「目录名」判断模型类型的（rife-v4.18 / rife-v4.25 …），
+    # 所以缓存里必须保留原始目录名，不能只放一个哈希目录。
+    dst_dir = os.path.join(dst_root, os.path.basename(src_dir))
+    sig = _dir_signature(src_dir)
+    marker = os.path.join(dst_root, ".sig")
+    fresh = False
+    if os.path.isdir(dst_dir) and os.path.isfile(marker):
+        try:
+            with open(marker, "r", encoding="utf-8") as f:
+                fresh = f.read().strip() == "%d/%d" % sig
+        except Exception:
+            fresh = False
+    if not fresh:
+        tmp = dst_root + ".tmp"
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.copytree(src_dir, os.path.join(tmp, os.path.basename(src_dir)))
+        shutil.rmtree(dst_root, ignore_errors=True)
+        os.rename(tmp, dst_root)
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write("%d/%d" % sig)
+        try:
+            emit({"ev": "log",
+                  "msg": "模型路径含中文，已镜像到 ASCII 缓存：%s" % dst_dir})
+        except Exception:
+            pass
+
+    rel = os.path.relpath(p, src_dir)
+    return dst_dir if rel == "." else os.path.join(dst_dir, rel)
 
 # 程序根目录（app 的上一级），用于定位 TensorRT 引擎缓存
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -203,7 +312,7 @@ def _trt_clip(clip, sr, log):
         "fp16" if fp16 else "fp32", shape[0], shape[1]))
     t0 = time.time()
     engine = vsmlrt.trtexec(
-        sr["param"], channels=3,
+        ascii_safe_path(sr["param"]), channels=3,
         opt_shapes=shape, max_shapes=shape, min_shapes=shape,
         fp16=fp16, device_id=int(sr.get("gpu", 0)),
         static_shape=True, input_format=0, output_format=0,
@@ -264,7 +373,7 @@ def process(cmd):
     k = (int(sr.get("scale", 2)) or 2) if sr else 2
 
     def _apply_vfi(c):
-        kw = dict(model_path=vfi["model"], gpu_id=int(vfi.get("gpu", 0)))
+        kw = dict(model_path=ascii_safe_path(vfi["model"]), gpu_id=int(vfi.get("gpu", 0)))
         if vfi.get("fps_num"):
             kw.update(fps_num=int(vfi["fps_num"]), fps_den=int(vfi.get("fps_den", 1)))
         else:
@@ -292,7 +401,7 @@ def process(cmd):
             if use_fp16 and "animejanai" in _pn:
                 use_fp16 = 0
                 emit({"ev": "log", "msg": "该模型 fp16 不稳定，已自动回退 fp32（画质优先）"})
-            kw = dict(clips=c, network_path=sr["param"],
+            kw = dict(clips=c, network_path=ascii_safe_path(sr["param"]),
                       device_id=int(sr.get("gpu", 0)),
                       fp16=use_fp16)
             # vsncnn 的 tilesize 有边界 bug：当 tile 尺寸 >= 输入帧的宽或高时，
@@ -306,7 +415,7 @@ def process(cmd):
             return CORE.ncnn.Model(**kw)
         # slvncnn：吃 ncnn .param（Real-ESRGAN 系列）
         return CORE.slvncnn.NativeModel(
-            c, model_path=sr["param"], scale=int(sr.get("scale", 2)),
+            c, model_path=ascii_safe_path(sr["param"]), scale=int(sr.get("scale", 2)),
             tile=int(sr.get("tile", 256) or 256), device_id=int(sr.get("gpu", 0)))
 
     # 消重永远在源帧上做（帧数最少、最便宜），与超分/补帧的先后无关
