@@ -187,7 +187,7 @@ THEMES = {
         "primary_disabled": "#1e3a5f", "primary_disabled_fg": "#9ca3af",
         "stop_bg": "#3f1d2e", "stop_border": "#7f1d1d", "stop_fg": "#fda4af", "stop_hover": "#4a1f30",
         "header_bg": "#1f2937", "item_border": "#374151", "scrollbar": "#4b5563",
-        "log_bg": "#000000", "log_fg": "#d1d5db", "drop_bg": "#1e293b",
+        "log_bg": "#0b1220", "log_fg": "#d1d5db", "drop_bg": "#1e293b",
     },
     "紫色": {
         "fg": "#3a3550", "bg": "#f3f0fa", "sidebar": "#ede8f7", "card": "#ffffff",
@@ -231,6 +231,7 @@ QPushButton#nav:hover {{ background: {accent_soft}; color: {accent}; }}
 QPushButton#nav:checked {{ background: {accent_checked}; color: {accent_checked_fg}; font-weight: 600; }}
 QPushButton#mode {{ background: {seg_rgba}; border: 1px solid {border2}; border-radius: 8px; padding: 8px 16px; color: {muted}; }}
 QPushButton#mode:hover {{ color: {accent}; border: 1px solid {accent}; }}
+QFrame#sep {{ background: {border2}; border: none; }}
 QPushButton#mode:checked {{ background: {card}; color: {accent_checked_fg}; font-weight: 600; border: 1px solid {accent_checked}; }}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ background: {card_rgba}; border: 1px solid {border2}; border-radius: 8px; padding: 6px 10px; min-height: 22px; }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid {focus_border}; outline: none; }}
@@ -1554,7 +1555,7 @@ class MainWindow(QMainWindow):
 
         line = QFrame()
         line.setFixedHeight(1)
-        line.setStyleSheet("background:#eef2f7;border:none;")
+        line.setObjectName("sep")
         card.v.addWidget(line)
 
         self.hw_body = QVBoxLayout()
@@ -2445,8 +2446,21 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(page)
         v.setContentsMargins(26, 22, 26, 22)
         v.setSpacing(12)
-        v.addWidget(QLabel("设置", objectName="h1"))
-        v.addWidget(QLabel("工作目录、默认输出，以及界面外观。", objectName="muted"))
+        head = QHBoxLayout()
+        hv = QVBoxLayout()
+        hv.setSpacing(2)
+        hv.addWidget(QLabel("设置", objectName="h1"))
+        hv.addWidget(QLabel("工作目录、默认输出，以及界面外观。", objectName="muted"))
+        head.addLayout(hv)
+        head.addStretch(1)
+        # 保存按钮放页头右上：整页只有「语言 / 默认输出目录」需要手动保存，
+        # 主题、颜色、通透度都是即时生效。放页尾会随内容滚走，还显得像浮在卡片外。
+        b_save = QPushButton("保存设置", objectName="primary")
+        b_save.setMinimumHeight(34)
+        b_save.setCursor(Qt.PointingHandCursor)
+        b_save.clicked.connect(self._save_from_settings)
+        head.addWidget(b_save, 0, Qt.AlignTop)
+        v.addLayout(head)
         card = Card()
 
         # 语言
@@ -2478,14 +2492,7 @@ class MainWindow(QMainWindow):
         # 界面美化并入本页（原独立页面已去掉）
         self._theme_section(v)
 
-        # 保存按钮放页尾：主题/颜色是即时生效的，这里保存的是语言与输出目录
-        hb = QHBoxLayout()
-        hb.addStretch(1)
-        b_save = QPushButton("保存设置", objectName="primary")
-        b_save.clicked.connect(self._save_from_settings)
-        hb.addWidget(b_save)
-        v.addLayout(hb)
-        v.addSpacing(4)
+        # 保存按钮已在页头右上，这里不再重复放页尾
         v.addStretch(1)
         return scroll
 
@@ -2587,7 +2594,7 @@ class MainWindow(QMainWindow):
 
         line_a = QFrame()
         line_a.setFixedHeight(1)
-        line_a.setStyleSheet("background:#eef2f7;border:none;")
+        line_a.setObjectName("sep")
         card.v.addWidget(line_a)
 
         # ---- 界面颜色（强调色 + 文字颜色）----
@@ -2663,7 +2670,7 @@ class MainWindow(QMainWindow):
 
         line_b = QFrame()
         line_b.setFixedHeight(1)
-        line_b.setStyleSheet("background:#eef2f7;border:none;")
+        line_b.setObjectName("sep")
         card.v.addWidget(line_b)
 
         # ---- 界面字体 ----
@@ -2702,11 +2709,11 @@ class MainWindow(QMainWindow):
         self.lbl_font.setFixedWidth(46)
         fs_row.addWidget(self.lbl_font)
         card.v.addLayout(fs_row)
-        card.v.addWidget(QLabel("缩放整个界面的字号（80%~140%），松手立即生效", objectName="hint"))
+        card.v.addWidget(QLabel("缩放整个界面的字号（80%~140%），拖动即时预览，松手保存", objectName="hint"))
 
         line_c = QFrame()
         line_c.setFixedHeight(1)
-        line_c.setStyleSheet("background:#eef2f7;border:none;")
+        line_c.setObjectName("sep")
         card.v.addWidget(line_c)
 
         # ---- 背景图 ----
@@ -2742,7 +2749,7 @@ class MainWindow(QMainWindow):
 
         line_d = QFrame()
         line_d.setFixedHeight(1)
-        line_d.setStyleSheet("background:#eef2f7;border:none;")
+        line_d.setObjectName("sep")
         card.v.addWidget(line_d)
 
         # ---- 通透度 ----
@@ -2762,7 +2769,7 @@ class MainWindow(QMainWindow):
 
         line_e = QFrame()
         line_e.setFixedHeight(1)
-        line_e.setStyleSheet("background:#eef2f7;border:none;")
+        line_e.setObjectName("sep")
         card.v.addWidget(line_e)
 
         # ---- 蒙版暗度 ----
@@ -3299,12 +3306,50 @@ class MainWindow(QMainWindow):
         self._save_settings()
 
     def _on_font_scale_changed(self, val):
-        # 拖动中只更新数字：重刷全量样式表要重排整棵树，逐步做会卡
+        """拖动中：数字立即跟随，样式表按 120ms 节流做实时预览。
+
+        全局 setStyleSheet 实测 230~280ms（整棵树重新 polish），逐格调用会卡；
+        窗口级只要 ~60ms，用它做预览足够跟手。松手/停手后再切回全局并保存。
+        """
         if hasattr(self, "lbl_font"):
             self.lbl_font.setText("%d%%" % int(val))
+        v = max(0.8, min(1.4, int(val) / 100.0))
+        if abs(v - float(getattr(self, "font_scale", 1.0))) < 1e-6:
+            return
+        if not hasattr(self, "_font_preview_timer"):
+            self._font_preview_timer = QTimer(self)
+            self._font_preview_timer.setSingleShot(True)
+            self._font_preview_timer.setInterval(120)   # 节流：最多约 8 次/秒
+            self._font_preview_timer.timeout.connect(self._preview_font_scale)
+            # 兜底：点滑槽、键盘方向键都不会发 sliderReleased，
+            # 停手 600ms 自动提交，免得预览样式留在窗口上却没存盘
+            self._font_commit_timer = QTimer(self)
+            self._font_commit_timer.setSingleShot(True)
+            self._font_commit_timer.setInterval(600)
+            self._font_commit_timer.timeout.connect(self._apply_font_scale)
+        # 注意这里是「节流」不是「防抖」：持续拖动时重启动计时器会让它永远不触发，
+        # 只有计时器空闲时才排下一次，保证拖动过程中每 120ms 真的预览一帧。
+        if not self._font_preview_timer.isActive():
+            self._font_preview_timer.start()
+        self._font_commit_timer.start()
+
+    def _preview_font_scale(self):
+        """实时预览：窗口级样式表（约 60ms），拖动时不掉帧。"""
+        if not hasattr(self, "sl_font"):
+            return
+        self.font_scale = max(0.8, min(1.4, self.sl_font.value() / 100.0))
+        self._refresh_stylesheet("window")
+        # 拖动还没停：把手继续移动的话，120ms 后再补一帧
+        if self.sl_font.isSliderDown() and \
+                abs(self.font_scale * 100.0 - self.sl_font.value()) > 0.5:
+            self._font_preview_timer.start()
 
     def _apply_font_scale(self):
-        """松手后一次性应用字号缩放。"""
+        """松手/停手：切回全局样式（弹窗、菜单一起缩放）并保存。"""
+        for name in ("_font_preview_timer", "_font_commit_timer"):
+            t = getattr(self, name, None)
+            if t is not None:
+                t.stop()
         try:
             v = int(self.sl_font.value())
         except Exception:
@@ -4517,33 +4562,53 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ 消息循环
     # ------------------------------------------------------------ 日志区配色
     def _style_log(self):
-        """把日志区配色直接下发给控件自身。
+        """把日志区配色直接下发给控件自身（半透明底 + 控件级优先级）。
 
         只靠全局 QSS 不保险：QTextEdit 是 QAbstractScrollArea 子类，模板里
         后面那条 `QAbstractScrollArea{background:transparent}` 在部分主题/样式
         下会把日志背景冲成透明，浅色与紫色主题就变成白底浅字看不清。
         控件级样式表优先级最高，钉死颜色后任何全局规则都压不过。
+
+        底色用半透明：比卡片再实一点（+14%），既能看到背景图，又保证小字号
+        日志在亮壁纸上也读得清。透明度跟「通透度」联动，不是写死的黑色块。
         """
         if not hasattr(self, "log"):
             return
         c = THEMES.get(self.theme, THEMES["浅色"])
         bg, fg, sel = c["log_bg"], c["log_fg"], c["accent2"]
         sb = c["scrollbar"]
+        edge = c.get("border2", "#cbd5e1")
+        # 日志底 = 卡片不透明度 - 6%：比卡片略透，能看到背景图，
+        # 但下限 52% 保证 12px 小字在亮壁纸上仍有足够对比（白字约 7:1）。
+        try:
+            card_a = _glass_alphas(getattr(self, "theme", "浅色"),
+                                   getattr(self, "glass", 0.0))["card"][1]
+        except Exception:
+            card_a = 88
+        # 深色主题日志底本身是纯黑，透一点更自然；浅色/紫色的日志底是深蓝/深紫，
+        # 太透会和亮壁纸混成灰蓝，白字反而发虚，所以保持更实一些。
+        if getattr(self, "theme", "浅色") == "深色":
+            alpha = max(64, min(84, int(card_a) - 2))
+        else:
+            alpha = max(82, min(94, int(card_a) + 18))
+        rgb = QColor(bg).getRgb()[:3]
+        bg_rgba = _rgba_css(rgb, alpha)
         self.log.setStyleSheet(
-            "QTextEdit {{ background-color: {bg}; color: {fg}; border: none;"
-            " border-radius: 10px; padding: 8px;"
+            "QTextEdit {{ background-color: {bg}; color: {fg};"
+            " border: 1px solid {edge}; border-radius: 10px; padding: 8px;"
             " selection-background-color: {sel}; selection-color: #ffffff; }}"
-            "QTextEdit QWidget {{ background-color: {bg}; color: {fg}; }}"
+            # 视口保持透明，让 QTextEdit 自己的半透明底透上来（两层叠加会变太实）
+            "QTextEdit > QWidget {{ background: transparent; color: {fg}; }}"
             "QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px 0; }}"
             "QScrollBar::handle:vertical {{ background: {sb}; border-radius: 5px; min-height: 30px; }}"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}"
-            .format(bg=bg, fg=fg, sel=sel, sb=sb))
-        # 双保险：连取色板一起设，避免某些平台样式忽略样式表背景
+            .format(bg=bg_rgba, fg=fg, sel=sel, sb=sb, edge=edge))
+        # 视口走透明，避免平台样式用不透明底色把上面的 rgba 盖掉
         pal = self.log.palette()
-        pal.setColor(self.log.viewport().backgroundRole(), QColor(bg))
+        pal.setColor(self.log.viewport().backgroundRole(), QColor(0, 0, 0, 0))
         pal.setColor(self.log.viewport().foregroundRole(), QColor(fg))
         self.log.viewport().setPalette(pal)
-        self.log.viewport().setAutoFillBackground(True)
+        self.log.viewport().setAutoFillBackground(False)
 
     # ------------------------------------------------------------ 长阶段提示
     def _on_kernel_status(self, ev):
