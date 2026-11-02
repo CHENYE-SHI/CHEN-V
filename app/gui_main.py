@@ -10,6 +10,7 @@ import queue
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -975,6 +976,19 @@ class MainWindow(QMainWindow):
                 label, desc = cat.get(_n, ("RIFE " + _n.replace("rife-", ""), ""))
                 self.rife_map[label] = _info
                 self.rife_desc[label] = desc
+        except Exception:
+            pass
+        # GMFSS Fortuna Union（PyTorch 光流补帧，可选组件）：装好 torch + 权重才出现
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import gmfss_engine
+            _ok, _why = gmfss_engine.available()
+            if _ok:
+                _label = "GMFSS Fortuna Union（光流·画质）"
+                self.rife_map[_label] = {"model": gmfss_engine.WEIGHTS_DIR,
+                                         "engine": "gmfss"}
+                self.rife_desc[_label] = ("动漫/线条优先：光流 + 融合网络，补出来的中间帧"
+                                          "比 RIFE 更稳，代价是慢 3~8 倍")
         except Exception:
             pass
 
@@ -4102,6 +4116,8 @@ class MainWindow(QMainWindow):
             if not ri:
                 raise RuntimeError("没有可用的 RIFE 模型")
             vfi = {"model": ri["model"], "gpu": 0,
+                   "engine": ri.get("engine", ""),
+                   "fp16": 1,
                    "factor_num": int(c["mult"]), "factor_den": 1,
                    "scene": 1 if c["scene"] else 0,
                    "dedup": 1 if c["dedup"] else 0,

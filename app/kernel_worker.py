@@ -486,6 +486,7 @@ def process(cmd):
 
     vfi = cmd.get("vfi")
     sr = cmd.get("sr")
+    gmfss = bool(vfi and vfi.get("engine") == "gmfss")
     tw, th = int(cmd.get("target_w") or 0), int(cmd.get("target_h") or 0)
     k = (int(sr.get("scale", 2)) or 2) if sr else 2
 
@@ -557,9 +558,10 @@ def process(cmd):
         # 补帧成本与像素数成正比，在 2160p 上补帧比在 1080p 上贵 4 倍。
         if tw > 0 and th > 0 and (tw != int(clip.width) or th != int(clip.height)):
             clip = CORE.resize.Lanczos(clip, width=tw, height=th)
-        clip = _apply_vfi(clip)
+        if not gmfss:
+            clip = _apply_vfi(clip)
     else:
-        if vfi:
+        if vfi and not gmfss:
             clip = _apply_vfi(clip)
         if sr:
             clip = _apply_sr(clip)
@@ -567,6 +569,11 @@ def process(cmd):
     if tw > 0 and th > 0 and (tw != int(clip.width) or th != int(clip.height)):
         # 缩回目标尺寸：用 Lanczos 高质量核（避免 Bicubic 造成的发糊）
         clip = CORE.resize.Lanczos(clip, width=tw, height=th)
+
+    if gmfss:
+        # GMFSS 不是 VapourSynth 滤镜（PyTorch 四段网络 + softsplat），
+        # 只能逐帧在 Python 里算，因此走独立的输出通路（rawvideo RGB24 → ffmpeg）。
+        return _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file)
 
     out_pix = cmd.get("out_pix") or "yuv420p10le"
     fmt = vs.YUV420P10 if "10" in out_pix else vs.YUV420P8
@@ -649,6 +656,158 @@ def process(cmd):
         except Exception:
             pass
     emit({"ev": "done", "output": output, "frames": total})
+
+
+def _rgb_frame_u8(frame, w, h):
+    """VapourSynth RGBS 帧 -> (h,w,3) uint8 RGB（平面顺序本来就是 R/G/B）。"""
+    import numpy as np
+    planes = []
+    for p in range(3):
+        stride = frame.get_stride(p)
+        buf = ctypes.string_at(frame.get_read_ptr(p), stride * h)
+        arr = np.frombuffer(buf, dtype=np.float32).reshape(h, stride // 4)[:, :w]
+        planes.append(np.clip(arr, 0.0, 1.0) * 255.0)
+    return np.stack(planes, axis=-1).round().astype(np.uint8)
+
+
+def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
+    """GMFSS Fortuna Union 补帧：逐帧 Python 推理，直接写 rawvideo RGB24 给 ffmpeg。"""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import gmfss_engine
+
+    ok, why = gmfss_engine.available()
+    if not ok:
+        raise RuntimeError("GMFSS 不可用：%s" % why)
+
+    emit({"ev": "log", "msg": "GMFSS：加载 Union 模型（首次约 2~5 秒）"})
+    ka = _KeepAlive("gmfss_load", "正在加载 GMFSS 模型", "（首次较慢）")
+    ka.start()
+    t_load = time.time()
+    try:
+        engine = gmfss_engine.GmfssUnion(fp16=bool(int(vfi.get("fp16", 1))))
+    finally:
+        ka.stop("GMFSS 模型加载完成")
+    emit({"ev": "log", "msg": "GMFSS：模型就绪（%s，用时 %.1fs）" % (
+        "fp16" if engine.fp16 else "fp32", time.time() - t_load)})
+
+    n = int(clip.num_frames)
+    w, h = int(clip.width), int(clip.height)
+    if n <= 0:
+        raise RuntimeError("源没有可处理的帧")
+    src_num, src_den = clip.fps_num, clip.fps_den
+    if not src_num or not src_den:
+        src_num, src_den = 24, 1
+    if vfi.get("fps_num"):
+        out_num, out_den = int(vfi["fps_num"]), int(vfi.get("fps_den", 1))
+    else:
+        out_num = src_num * int(vfi.get("factor_num", 2))
+        out_den = src_den * int(vfi.get("factor_den", 1))
+    ratio = max(1.0, (out_num / float(out_den)) / (src_num / float(src_den)))
+
+    # 每对相邻帧插几个点：ratio=2 时 t=0.5；ratio=2.5 时 t=0.4/0.8，依次类推
+    steps = []
+    j = 1
+    while j / ratio < 1.0 - 1e-6:
+        steps.append(j / ratio)
+        j += 1
+    total = n + (n - 1) * len(steps)
+    emit({"ev": "info", "width": w, "height": h, "frames": total,
+          "fps_num": out_num, "fps_den": out_den})
+    emit({"ev": "log", "msg": "GMFSS：%d 帧 -> %d 帧（每对插 %d 帧，%d×%.2f）" % (
+        n, total, len(steps), out_num, out_den)})
+
+    ffmpeg = cmd["ffmpeg"]
+    codec = cmd["codec"]
+    codec_args = list(cmd.get("codec_args") or [])
+    audio = bool(cmd.get("audio", True)) and not image_seq
+    if image_seq:
+        out_path = output
+        os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
+    else:
+        root, ext = os.path.splitext(output)
+        out_path = root + ".part" + (ext or ".mp4")
+
+    args = [ffmpeg, "-v", "error", "-y", "-nostdin",
+            "-f", "rawvideo", "-pix_fmt", "rgb24",
+            "-s", "%dx%d" % (w, h), "-r", "%d/%d" % (out_num, out_den),
+            "-i", "pipe:0"]
+    if audio:
+        args += ["-i", input_path, "-map", "0:v:0", "-map", "1:a?"]
+    else:
+        args += ["-map", "0:v:0"]
+    args += ["-c:v", codec] + codec_args
+    if image_seq:
+        args += ["-f", "image2", "-start_number", "1", out_path]
+    else:
+        if audio:
+            args += ["-c:a", "copy"]
+        args.append(out_path)
+
+    err = tempfile.TemporaryFile()
+    _ff_kw = {}
+    if os.name == "nt":
+        _si = subprocess.STARTUPINFO()
+        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        _si.wShowWindow = 0
+        _ff_kw = {"creationflags": 0x08000000, "startupinfo": _si}
+    proc = subprocess.Popen(args, stdin=subprocess.PIPE, stderr=err, **_ff_kw)
+    t0 = time.time()
+    written = 0
+
+    def _put(arr):
+        nonlocal written
+        if cancel_file and os.path.exists(cancel_file):
+            raise Cancelled()
+        proc.stdin.write(arr.tobytes())
+        written += 1
+        if written % 2 == 0 or written == total:
+            sp = written / max(time.time() - t0, 1e-6)
+            emit({"ev": "progress", "current": written, "total": total, "fps": sp})
+
+    try:
+        prev = _rgb_frame_u8(clip.get_frame(0), w, h)
+        for i in range(n - 1):
+            nxt = _rgb_frame_u8(clip.get_frame(i + 1), w, h)
+            _put(prev)
+            if steps:
+                for arr in engine.interpolate(prev, nxt, steps):
+                    _put(arr)
+            prev = nxt
+        _put(prev)
+        proc.stdin.close()
+    except Cancelled:
+        try:
+            proc.stdin.close()
+        except Exception:
+            pass
+        proc.kill()
+        proc.wait()
+        _cleanup(output, image_seq, out_path)
+        emit({"ev": "cancelled"})
+        return
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        _cleanup(output, image_seq, out_path)
+        raise
+    code = proc.wait()
+    if code != 0:
+        err.seek(0)
+        tail = err.read().decode("utf-8", "replace")[-1200:]
+        _cleanup(output, image_seq, out_path)
+        raise RuntimeError("ffmpeg 退出码 %s：%s" % (code, tail.strip()))
+    if not image_seq:
+        try:
+            if os.path.exists(output):
+                os.remove(output)
+            os.replace(out_path, output)
+        except Exception:
+            pass
+    emit({"ev": "log", "msg": "GMFSS：完成，用时 %.1fs（%.2f 帧/秒）" % (
+        time.time() - t0, written / max(time.time() - t0, 1e-6))})
+    emit({"ev": "done", "output": output, "frames": written, "elapsed": time.time() - t0})
 
 
 def _cleanup(output, image_seq, part=None):

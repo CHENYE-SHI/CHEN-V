@@ -31,6 +31,11 @@ VERIFY_EXTS = (".py", ".json", ".bat", ".md", ".nsi", ".csproj", ".manifest", ".
 
 STALE_LIMIT = 30      # 多余文件逐个删除的上限，超过只告警不删
 
+# 可选组件（torch 4.2GB / numpy / pip 等）不进安装包：用户跑
+# 「安装GMFSS组件.bat」时再下载。site-packages 里只保留这些原有目录。
+SITE_PACKAGES_KEEP = {"vapoursynth"}
+SKIP_DIRS_REL = {"vrt/python/Scripts"}
+
 
 def log(msg=""):
     print(msg, flush=True)
@@ -70,9 +75,32 @@ def sync_file(src, dst, stats):
         stats["same"] += 1
 
 
+def _skip_tree(root):
+    """判断该目录是否整体跳过（可选组件、pip 脚本目录）。"""
+    rel = os.path.relpath(root, ROOT).replace(os.sep, "/")
+    if rel in SKIP_DIRS_REL:
+        return True
+    sp = "vrt/python/Lib/site-packages"
+    if rel == sp or rel.startswith(sp + "/"):
+        top = rel[len(sp):].strip("/").split("/")[0]
+        if top and top not in SITE_PACKAGES_KEEP:
+            return True
+    return False
+
+
+def _is_site_packages_root(root):
+    return os.path.relpath(root, ROOT).replace(os.sep, "/") == "vrt/python/Lib/site-packages"
+
+
 def sync_tree(src_dir, dst_dir, stats):
     for root, dirs, files in os.walk(src_dir):
         dirs[:] = [d for d in dirs if d != "__pycache__"]     # 不打包编译缓存
+        if _skip_tree(root):
+            dirs[:] = []
+            continue
+        if _is_site_packages_root(root):
+            # site-packages 根下散落的 .pth/.py 都是可选组件的，一并排除
+            files = [f for f in files if f in SITE_PACKAGES_KEEP]
         rel = os.path.relpath(root, src_dir)
         target_root = dst_dir if rel == "." else os.path.join(dst_dir, rel)
         os.makedirs(target_root, exist_ok=True)
@@ -115,6 +143,9 @@ def verify():
         if not os.path.isdir(base):
             continue
         for root, _dirs, files in os.walk(base):
+            if _skip_tree(root) or _is_site_packages_root(root):
+                _dirs[:] = []
+                continue
             for name in files:
                 if not name.lower().endswith(VERIFY_EXTS):
                     continue
