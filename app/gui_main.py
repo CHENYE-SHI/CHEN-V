@@ -1772,20 +1772,30 @@ class MainWindow(QMainWindow):
         rv.setContentsMargins(2, 2, 2, 2)
         rv.setSpacing(12)
 
-        # 拖放区
+        # 拖放区：文字在上、按钮在下。
+        # 早前按钮和标题挤在同一行，字号放大到 130% 以上时「拖入图片、视频或文件夹」
+        # 会被按钮挤成「拖入图片、视…」，右侧面板又固定 360px，只能裁掉。
         drop = GlassPanel("drop")
-        dh = QHBoxLayout(drop)
-        dh.setContentsMargins(18, 16, 18, 16)
-        dh.setSpacing(14)
+        dv = QVBoxLayout(drop)
+        dv.setContentsMargins(18, 16, 18, 16)
+        dv.setSpacing(10)
+        head = QHBoxLayout()
+        head.setSpacing(14)
         self.drop_ico = QLabel("↓")
         self.drop_ico.setStyleSheet(_ico_css("#3b82f6"))
-        dh.addWidget(self.drop_ico)
-        dv = QVBoxLayout()
-        dv.setSpacing(2)
-        dv.addWidget(QLabel("拖入图片、视频或文件夹", objectName="h2"))
-        dv.addWidget(QLabel("单个素材直接处理，多个素材自动加入批量队列", objectName="muted"))
-        dh.addLayout(dv)
-        dh.addStretch(1)
+        head.addWidget(self.drop_ico)
+        tv = QVBoxLayout()
+        tv.setSpacing(2)
+        lb_title = QLabel("拖入图片、视频或文件夹", objectName="h2")
+        lb_title.setWordWrap(True)
+        tv.addWidget(lb_title)
+        lb_sub = QLabel("单个素材直接处理，多个素材自动加入批量队列", objectName="muted")
+        lb_sub.setWordWrap(True)
+        tv.addWidget(lb_sub)
+        head.addLayout(tv, 1)
+        dv.addLayout(head)
+        dh = QHBoxLayout()
+        dh.setSpacing(8)
         b_files = QPushButton("选择文件")
         b_files.clicked.connect(self._pick_files)
         b_files.setToolTip("选择一个或多个视频/图片文件加入队列")
@@ -1794,6 +1804,8 @@ class MainWindow(QMainWindow):
         b_dir.setToolTip("选择整个文件夹，自动加入其中所有可处理的视频/图片素材")
         dh.addWidget(b_files)
         dh.addWidget(b_dir)
+        dh.addStretch(1)
+        dv.addLayout(dh)
         rv.addWidget(drop)
         self.drop_area = drop
 
@@ -1843,11 +1855,13 @@ class MainWindow(QMainWindow):
         qcard.v.addWidget(self.lbl_empty)
 
         qb = QHBoxLayout()
-        b_clear = QPushButton("清空队列")
+        # 字号放大后 360px 的右栏放不下三个四字按钮，次要按钮改两字（悬停有完整说明）
+        qb.setSpacing(6)
+        b_clear = QPushButton("清空")
         b_clear.clicked.connect(self._clear_queue)
         b_clear.setToolTip("清空素材队列中的所有任务（不影响正在处理的任务）")
         qb.addWidget(b_clear)
-        b_del = QPushButton("移除选中")
+        b_del = QPushButton("移除")
         b_del.clicked.connect(self._remove_selected)
         b_del.setToolTip("从队列中移除当前选中的素材（也可右键选移除）")
         qb.addWidget(b_del)
@@ -2068,13 +2082,28 @@ class MainWindow(QMainWindow):
                 g.addWidget(QLabel(l2, objectName="muted"), r, 2)
             g.addWidget(w2, r, 3)
             r += 1
+        # 参数区的下拉框不能按「最长选项」撑宽度：GMFSS Fortuna Union（光流·动漫）
+        # 这类长名字会把左栏最小宽度顶到 690px，默认窗口下就冒出横向滚动条。
+        # 改成按约 10 个字宽估算，宽度不够时显示省略号，弹层里仍是完整名称。
+        for _cb in (self.cb_kernel, self.cb_dev, self.cb_sr, self.cb_vfi,
+                    self.cb_enc, self.cb_rate, self.cb_res, self.cb_fmt,
+                    self.cb_tile):
+            _cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            _cb.setMinimumContentsLength(10)
+            _cb.setMinimumWidth(150)
         chk = QGridLayout()
         chk.setHorizontalSpacing(22)
         chk.setVerticalSpacing(6)
+        # 复选框排 2 列而不是 3 列：3 列时三列的最长文字（"先超分 → 再补帧（更快，推荐）"、
+        # "超分按输出分辨率（更快）"、"TensorRT 加速（NVIDIA 显卡）"）加起来会把参数卡
+        # 最小宽度顶到 690px，默认窗口（左栏约 600px）就会冒出横向滚动条。
+        # 2 列最宽约 460px，任何正常窗口宽度下都不会出现横向滚动条。
         for _i, w in enumerate((self.chk_two, self.chk_workres, self.chk_trt,
                                 self.chk_keep, self.dedup_wrap, self.chk_scene,
                                 self.chk_hw, self.chk_turbo)):
-            chk.addWidget(w, _i // 3, _i % 3)
+            chk.addWidget(w, _i // 2, _i % 2)
+        chk.setColumnStretch(0, 1)
+        chk.setColumnStretch(1, 1)
         g.addWidget(self.lbl_sr_desc, r, 0, 1, 4)
         r += 1
         g.addWidget(self.lbl_vfi_desc, r, 0, 1, 4)
