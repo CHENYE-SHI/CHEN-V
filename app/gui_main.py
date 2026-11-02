@@ -1415,7 +1415,7 @@ class MainWindow(QMainWindow):
         navs = [("超分补帧", "◆"), ("进度", "◎"),
                 ("官网更新", "→"), ("设置", "≡"),
                 ("界面美化", "◇"), ("硬件信息", "■"),
-                ("关于", "⊙"), ("特别鸣谢", "☆")]
+                ("关于", "⊙")]
         self.nav_buttons = {}
         for text, icon in navs:
             b = QPushButton("%s   %s" % (icon, text), objectName="nav")
@@ -1555,8 +1555,7 @@ class MainWindow(QMainWindow):
                     ("设置", self._build_settings_page),
                     ("界面美化", self._build_theme_page),
                     ("硬件信息", self._build_hardware_page),
-                    ("关于", self._build_about_page),
-                    ("特别鸣谢", self._build_thanks_page))
+                    ("关于", self._build_about_page))
         total = len(builders)
         # 第一个页面（用户第一眼要看的）立刻入栈，其余的先攒着：
         # QStackedWidget.addWidget 每页要 60ms 左右（整棵树重新 polish），
@@ -2776,6 +2775,12 @@ class MainWindow(QMainWindow):
         # RIFE：models/vfi_rife 下的 rife-v* 目录（下划线开头的是坏档，跳过）
         rife_n = len([d for d in glob.glob(os.path.join(vfi, "rife-v*"))
                       if os.path.isdir(d) and not os.path.basename(d).startswith("_")])
+        # GMFSS：PyTorch 运行时（可选组件）+ 五个权重文件都在才算就绪
+        gmfss_dir = os.path.join(plugins, "gmfss", "weights")
+        gmfss_n = count_files(gmfss_dir, ("*.pkl",))
+        torch_ok = os.path.isdir(os.path.join(
+            paths.ROOT, "vrt", "python", "Lib", "site-packages", "torch"))
+        gmfss_ok = torch_ok and gmfss_n >= 5
         # VapourSynth 内核：缺任一个推理插件都跑不起来
         vs_ok = has(os.path.join(plugins, "vsncnn.dll")) and \
             has(os.path.join(plugins, "librife.dll"))
@@ -2794,6 +2799,12 @@ class MainWindow(QMainWindow):
             dict(key="rife", name="RIFE", desc="视频补帧 · 插帧引擎",
                  path=vfi, ok=rife_n > 0, kind="dir",
                  pickable=False, optional=False, count=rife_n),
+            dict(key="gmfss", name="GMFSS Fortuna", desc="光流补帧 · 动漫线条优先",
+                 path=gmfss_dir,
+                 ok=gmfss_ok, kind="dir", pickable=False, optional=True, count=None,
+                 tip="可选组件：需要额外安装 PyTorch 运行时（约 2.8GB）。\n"
+                     "双击程序目录里的「安装GMFSS组件.bat」即可，装完重启本程序，\n"
+                     "补帧模型下拉框里会出现 GMFSS Fortuna Union。"),
             dict(key="kernel", name="内置加速内核", desc="常驻补帧 / 超分进程",
                  path=kernel_py, ok=kernel_backend.available(), kind="file",
                  pickable=False, optional=False, count=None),
@@ -2821,7 +2832,8 @@ class MainWindow(QMainWindow):
         st.setStyleSheet("color:%s;font-size:12px;" %
                          ("#16a34a" if ok else ("#64748b" if sp.get("optional") else "#94a3b8")))
         if sp.get("optional") and not ok:
-            st.setToolTip(_tl("可选加速组件：装好后勾选「TensorRT 加速」可快 2~3 倍，"
+            st.setToolTip(_tl(sp.get("tip") or
+                              "可选加速组件：装好后勾选「TensorRT 加速」可快 2~3 倍，"
                               "未装则自动使用 ncnn。"))
         return st
 
@@ -3318,7 +3330,8 @@ class MainWindow(QMainWindow):
         for _i, (_key, _line) in enumerate((
                 ("about.intro.1", "CHEN-V · 补帧 + 超分"),
                 ("about.intro.2",
-                 "RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分，"
+                 "RIFE ncnn 补帧（可选 GMFSS Fortuna 光流补帧）+ "
+                 "Real-CUGAN / Real-ESRGAN 超分，"
                  "支持视频 / 图片 / 批量队列 / 图片序列输出。"),
                 ("about.intro.3",
                  "内置加速内核常驻运行，底层使用本地 ncnn / ONNX 模型。"))):
@@ -3367,6 +3380,10 @@ class MainWindow(QMainWindow):
              "本程序仅调用随软件提供的本地模型与组件，不对模型权重主张任何权利。"),
             ("RIFE", "lic.rife",
              "版权归旷视研究院所有，rife-ncnn-vulkan 采用 MIT 许可，模型源自 RIFE 项目。"),
+            ("GMFSS Fortuna", "lic.gmfss",
+             "版权归其作者所有（98mxr/GMFSS_Fortuna，MIT 许可）；模型权重（Union）"
+             "派生自 HolyWu/vs-gmfss_fortuna（MIT 许可）。本程序仅在本地做推理调用，"
+             "不对模型权重主张任何权利。"),
             ("ncnn / Vulkan", "lic.ncnn",
              "版权归腾讯优图 nihui 等所有（Tencent/ncnn），采用 BSD 3-Clause 许可。"),
             ("vs-mlrt / vsncnn", "lic.vsmlrt",
@@ -3383,6 +3400,9 @@ class MainWindow(QMainWindow):
              "受 NVIDIA Software License Agreement 约束；"
              "可随本软件以二进制形式免费分发，仅限在 NVIDIA GPU 上运行，"
              "不得单独分发、逆向工程或用于非 NVIDIA 硬件。"),
+            ("PyTorch", "lic.torch",
+             "版权归 Meta Platforms 及贡献者所有，采用 BSD 风格许可；"
+             "仅作为 GMFSS 可选组件的推理运行时，不随主程序分发，由用户自行安装。"),
             ("PySide6 / Qt", "lic.qt",
              "版权归 The Qt Company 所有，采用 LGPL/GPL 许可，用于图形界面。"),
         ]
@@ -3406,46 +3426,6 @@ class MainWindow(QMainWindow):
         v.addWidget(note)
         v.addStretch(1)
         # 内容较长：放进滚动区，窗口变矮时不会挤成一团
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(page)
-        return scroll
-
-    def _build_thanks_page(self):
-        page = QWidget()
-        v = QVBoxLayout(page)
-        v.setContentsMargins(26, 22, 26, 22)
-        v.addWidget(QLabel("特别鸣谢", objectName="h1"))
-        v.addWidget(QLabel("本项目使用了以下开源项目与模型（含少量专有组件），"
-                           "谨向各位作者致以诚挚谢意。",
-                           objectName="muted"))
-        card = Card()
-        thanks = [
-            ("Real-CUGAN", "bilibili AI 实验室（bilibili/ailab）", "动漫超分模型"),
-            ("Real-ESRGAN", "Xintao Wang 等（xinntao/Real-ESRGAN）", "通用超分模型"),
-            ("RIFE", "旷视研究院（megvii-research/RIFE）", "视频补帧模型"),
-            ("FFmpeg", "FFmpeg 团队", "音视频编解码"),
-            ("ncnn / Vulkan", "腾讯优图 nihui 等（Tencent/ncnn）", "推理框架"),
-            ("VapourSynth", "Fredrik Mellbin 等", "视频处理内核"),
-            ("vs-mlrt", "AmusementClub（vs-mlrt）", "推理插件 · GPL-3.0"),
-            ("NVIDIA TensorRT", "NVIDIA Corporation", "GPU 加速 · 专有许可"),
-            ("PySide6 / Qt", "The Qt Company", "界面框架"),
-            ("onnxruntime-directml", "Microsoft", "ONNX 推理运行时"),
-        ]
-        for name, author, desc in thanks:
-            row = QHBoxLayout()
-            row.setSpacing(10)
-            nm = QLabel(name, objectName="h2")
-            nm.setFixedWidth(180)                       # 容纳 onnxruntime-directml 这类长名
-            row.addWidget(nm)
-            au = QLabel(_tl(author), objectName="hint")
-            row.addWidget(au, 1)
-            ds = QLabel(_tl(desc), objectName="muted")
-            row.addWidget(ds)
-            card.v.addLayout(row)
-        v.addWidget(card)
-
-        v.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(page)

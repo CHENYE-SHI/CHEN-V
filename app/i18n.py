@@ -639,11 +639,13 @@ _T = {
         "en": "CHEN-V · Frame interpolation + upscaling",
         "ja": "CHEN-V · フレーム補間 + 超解像"},
     "about.intro.2": {
-        "zh-TW": "RIFE ncnn 補幀 + Real-CUGAN / Real-ESRGAN 超分，"
+        "zh-TW": "RIFE ncnn 補幀（可選 GMFSS Fortuna 光流補幀）+ Real-CUGAN / Real-ESRGAN 超分，"
                  "支援視頻 / 圖片 / 批量隊列 / 圖片序列輸出。",
-        "en": "RIFE ncnn interpolation + Real-CUGAN / Real-ESRGAN upscaling. "
+        "en": "RIFE ncnn interpolation (optional GMFSS Fortuna flow-based) + "
+              "Real-CUGAN / Real-ESRGAN upscaling. "
               "Supports video, images, batch queues and image-sequence output.",
-        "ja": "RIFE ncnn による補間 + Real-CUGAN / Real-ESRGAN による超解像。"
+        "ja": "RIFE ncnn による補間（オプションで GMFSS Fortuna のオプティカルフロー補間）"
+              "＋ Real-CUGAN / Real-ESRGAN による超解像。"
               "動画・画像・バッチキュー・連番画像の出力に対応します。"},
     "about.intro.3": {
         "zh-TW": "內置加速內核常駐運行，底層使用本地 ncnn / ONNX 模型。",
@@ -843,6 +845,44 @@ def tr(text):
         return text
     return entry.get(_CURRENT, text)
 
+
+_T.update({
+    "光流补帧 · 动漫线条优先": {
+        "zh-TW": "光流補幀 · 動漫線條優先",
+        "en": "Optical-flow interpolation · tuned for line art",
+        "ja": "オプティカルフロー補間 · 線画向け"},
+    "可选组件：需要额外安装 PyTorch 运行时（约 2.8GB）。\n"
+    "双击程序目录里的「安装GMFSS组件.bat」即可，装完重启本程序，\n"
+    "补帧模型下拉框里会出现 GMFSS Fortuna Union。": {
+        "zh-TW": "可選組件：需要額外安裝 PyTorch 執行時（約 2.8GB）。\n"
+                 "雙擊程式目錄裡的「安装GMFSS组件.bat」即可，裝完重啟本程式，\n"
+                 "補幀模型下拉選單裡會出現 GMFSS Fortuna Union。",
+        "en": "Optional component: needs the PyTorch runtime (~2.8 GB).\n"
+              "Double-click \"安装GMFSS组件.bat\" in the program folder, then restart;\n"
+              "GMFSS Fortuna Union appears in the interpolation model list.",
+        "ja": "オプションコンポーネント：PyTorch ランタイム（約 2.8GB）が必要です。\n"
+              "プログラムフォルダの「安装GMFSS组件.bat」を実行して再起動すると、\n"
+              "補間モデルに GMFSS Fortuna Union が表示されます。"},
+    "lic.gmfss": {
+        "zh-TW": "版權歸其作者所有（98mxr/GMFSS_Fortuna，MIT 許可）；模型權重（Union）"
+                 "派生自 HolyWu/vs-gmfss_fortuna（MIT 許可）。本程式僅在本機做推理呼叫，"
+                 "不對模型權重主張任何權利。",
+        "en": "Copyright belongs to its authors (98mxr/GMFSS_Fortuna, MIT). "
+              "The Union weights derive from HolyWu/vs-gmfss_fortuna (MIT). "
+              "This app only runs local inference and claims no rights over the weights.",
+        "ja": "著作権は作者に帰属します（98mxr/GMFSS_Fortuna、MIT）。Union の重みは "
+              "HolyWu/vs-gmfss_fortuna（MIT）由来です。本アプリはローカル推論のみを行い、"
+              "重みに関する権利を主張しません。"},
+    "lic.torch": {
+        "zh-TW": "版權歸 Meta Platforms 及貢獻者所有，採用 BSD 風格許可；"
+                 "僅作為 GMFSS 可選組件的推理執行時，不隨主程式分發，由使用者自行安裝。",
+        "en": "Copyright Meta Platforms and contributors, BSD-style license. "
+              "Used only as the inference runtime of the optional GMFSS component; "
+              "not bundled with the app and installed by the user.",
+        "ja": "著作権は Meta Platforms と貢献者に帰属し、BSD 系ライセンスです。"
+              "GMFSS オプションコンポーネントの推論ランタイムとしてのみ使用され、"
+              "本体には同梱されず、ユーザーが導入します。"},
+})
 
 # 反向索引：任意语言的译文 -> 简体中文 key（用于切换语言时还原）
 _REVERSE = {}
