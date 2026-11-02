@@ -229,8 +229,8 @@ QPushButton#stop:hover {{ background: {stop_hover}; }}
 QPushButton#nav {{ text-align: left; padding: 10px 14px; border: none; border-radius: 9px; color: {hint}; background: transparent; font-size: 13px; }}
 QPushButton#nav:hover {{ background: {accent_soft}; color: {accent}; }}
 QPushButton#nav:checked {{ background: {accent_checked}; color: {accent_checked_fg}; font-weight: 600; }}
-QPushButton#mode {{ background: transparent; border: none; border-radius: 8px; padding: 8px 16px; color: {muted}; }}
-QPushButton#mode:hover {{ color: {accent}; }}
+QPushButton#mode {{ background: {seg_rgba}; border: 1px solid {border2}; border-radius: 8px; padding: 8px 16px; color: {muted}; }}
+QPushButton#mode:hover {{ color: {accent}; border: 1px solid {accent}; }}
 QPushButton#mode:checked {{ background: {card}; color: {accent_checked_fg}; font-weight: 600; border: 1px solid {accent_checked}; }}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ background: {card_rgba}; border: 1px solid {border2}; border-radius: 8px; padding: 6px 10px; min-height: 22px; }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid {focus_border}; outline: none; }}
@@ -337,10 +337,14 @@ def _glass_alphas(theme, glass):
     base = _GLASS_BASES.get(theme, _GLASS_BASES["浅色"])
     extra = max(0.0, glass - 1.0)
     k = 1.0 - 1.4 * extra                    # 100% → 1.0，150% → 0.3
+    # 不透明度下限：通透度拉满时原先能降到 19%（卡片几乎全透），
+    # 背景是亮色壁纸/视频时文字直接糊在图上看不清。这里给每类容器兜底，
+    # 保证「再透也还能读」——150% 仍然明显比 100% 透。
+    floors = {"card": 46, "sidebar": 44, "drop": 40, "seg": 40}
     out = {}
     for key, (rgb, a0, drop) in base.items():
         a = (a0 - drop * min(glass, 1.0)) * k
-        out[key] = (rgb, max(6, min(100, int(a + 0.5))))
+        out[key] = (rgb, max(floors.get(key, 26), min(100, int(a + 0.5))))
     out["statusbar"] = out["card"]           # 状态栏与卡片同透明度
     return out
 
@@ -2576,7 +2580,7 @@ class MainWindow(QMainWindow):
             b.setMinimumHeight(34)
             self.theme_group.addButton(b)
             self.theme_buttons[name] = b
-            b.clicked.connect(lambda _=False, n=name: self._apply_theme(n))
+            b.clicked.connect(lambda _=False, n=name: self._apply_theme(n, persist=True))
             th_row.addWidget(b, 1)
         th_wrap.addLayout(th_row)
         card.v.addLayout(th_wrap)
@@ -3104,22 +3108,21 @@ class MainWindow(QMainWindow):
         self.cb_font.setProperty("i18n_combo", True)
         self.cb_font.blockSignals(False)
 
-    def _apply_theme(self, name=None):
-        """应用主题配色，并同步刷新选中态与字体。"""
+    def _apply_theme(self, name=None, persist=False):
+        """应用主题配色，并同步刷新选中态与字体。
+
+        persist=True 只在用户点主题按钮时传：此时才写盘。
+        启动恢复设置也会走这里，绝不能顺手保存——早前这里既清空了自定义
+        强调色/文字色又立刻写盘，导致「选好颜色 → 重启 → 变回默认」。
+        自定义颜色现在只由「恢复默认」按钮清除。
+        """
         if name is None:
             name = getattr(self, "theme", "浅色")
         if name not in THEMES:
             name = "浅色"
         self.theme = name
-        # 切换主题时清除遗留的自定义强调色/文字色，让新主题默认配色完整生效；
-        # 用户如需自定义，可切完主题后再单独「选择颜色」。
-        if self.accent_color:
-            self.accent_color = ""
-            self.setting["accent_color"] = ""
-        if self.text_color:
-            self.text_color = ""
-            self.setting["text_color"] = ""
-        self._save_settings()
+        if persist:
+            self._save_settings()
         if hasattr(self, "theme_buttons"):
             for tn, b in self.theme_buttons.items():
                 b.setChecked(tn == name)
@@ -3209,13 +3212,16 @@ class MainWindow(QMainWindow):
         qss = _make_qss(self.theme, self.font_family or "Microsoft YaHei UI",
                         getattr(self, "accent_color", "") or "",
                         getattr(self, "text_color", "") or "",
-                        getattr(self, "glass", 0.0))
+                        getattr(self, "glass", 0.0),
+                        float(getattr(self, "font_scale", 1.0) or 1.0))
         # 常见情况：启动时已按最终主题铺过一遍，这里算出来一模一样 → 直接跳过，
         # 省掉那次全局重新 polish（约 0.2~0.3s，窗口刚出来就卡一下很明显）
         if qss != self._boot_qss:
             app = QApplication.instance()
             if app is not None:
-                app.setFont(_app_font(self.font_family or "Microsoft YaHei UI"))
+                app.setFont(_app_font(
+                    self.font_family or "Microsoft YaHei UI",
+                    max(8, int(round(10 * float(getattr(self, "font_scale", 1.0) or 1.0))))))
                 self.setStyleSheet("")
                 app.setStyleSheet(qss)
         try:
@@ -3685,6 +3691,7 @@ class MainWindow(QMainWindow):
         self.sp_dup.setEnabled(vfi and self.chk_dedup.isChecked())
         self._sync_fps()
         self._refresh_mode_hint()
+        self._sync_vfi_desc()      # 模式变了，GMFSS 的显存提示也要跟着显隐
 
     def _refresh_trt_available(self):
         """TensorRT 复选框该不该可勾。
@@ -3742,7 +3749,15 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "lbl_vfi_desc"):
             return
         name = _cb_val(self.cb_vfi)
-        self.lbl_vfi_desc.setText(_tl(self.rife_desc.get(name, "")))
+        desc = _tl(self.rife_desc.get(name, ""))
+        # GMFSS 显存占用远高于 RIFE：4K 上单帧激活值约 11GB，8GB 卡跑不了。
+        # 内核会按显存预算自动降级（跳过 AI 超分、改用 Lanczos 放大），
+        # 提前在这里讲清楚，免得用户以为是画质变差或程序出错。
+        if self.rife_map.get(name, {}).get("engine") == "gmfss" \
+                and getattr(self, "mode", "") != MODE_VFI:
+            desc = (desc + "\n提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、"
+                           "改用 Lanczos 放大；要 4K + AI 超分请改用 RIFE。")
+        self.lbl_vfi_desc.setText(desc)
 
     def _sync_sr_desc(self):
         """根据当前选中的超分模型，更新用途说明文字。"""
@@ -4606,7 +4621,15 @@ class MainWindow(QMainWindow):
                         b.setEnabled(True)
                     self.settings_panel.setEnabled(True)
                     ok = sum(1 for it in self.items if it.get("status") == "完成")
-                    self.lbl_cur.setText("队列结束：完成 %d / %d" % (ok, len(self.items)))
+                    bad = sum(1 for it in self.items if it.get("status") == "失败")
+                    # 队列结束把进度条归零：否则中途失败会把 80% 这种数字一直留在界面上，
+                    # 看着像任务还卡在那里没结束。
+                    self.pb_main.setValue(0)
+                    if bad:
+                        self.lbl_cur.setText("队列结束：完成 %d / %d（失败 %d）"
+                                             % (ok, len(self.items), bad))
+                    else:
+                        self.lbl_cur.setText("队列结束：完成 %d / %d" % (ok, len(self.items)))
         except queue.Empty:
             pass
 
@@ -4943,8 +4966,12 @@ def _boot_qss_from_settings():
     theme = st.get("theme") or "浅色"
     if theme not in THEMES:
         theme = "浅色"
+    try:
+        scale = max(0.75, min(1.6, float(st.get("font_scale", 100)) / 100.0))
+    except Exception:
+        scale = 1.0
     return fam, _make_qss(theme, fam, st.get("accent_color", "") or "",
-                          st.get("text_color", "") or "", glass)
+                          st.get("text_color", "") or "", glass, scale), scale
 
 
 def run(splash=None):
@@ -4956,8 +4983,8 @@ def run(splash=None):
     _i18n.install_qt_translator(app)
     # 字体与样式表在「还没有任何控件」的时候装好，成本几乎是 0；
     # 之后 MainWindow 建出来的每个控件第一次 polish 就已经是最终样式
-    fam, boot_qss = _boot_qss_from_settings()
-    app.setFont(_app_font(fam))
+    fam, boot_qss, boot_scale = _boot_qss_from_settings()
+    app.setFont(_app_font(fam, max(8, int(round(10 * boot_scale)))))
     app.setStyleSheet(boot_qss)
 
     def _tick(text=None, progress=None):

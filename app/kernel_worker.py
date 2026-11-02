@@ -448,6 +448,29 @@ def _trt_clip(clip, sr, log):
 
 
 
+def _gpu_total_gb():
+    """本机显卡总显存（GB）；探不到返回 0。"""
+    try:
+        import torch
+        return torch.cuda.get_device_properties(0).total_memory / float(1024 ** 3)
+    except Exception:
+        return 0.0
+
+
+def _gmfss_pixel_budget(fp16=True):
+    """GMFSS 单帧可安全推理的像素上限。
+
+    实测 RTX 5060 Laptop(8GB)：1080p fp16 峰值 2.76GB，约 1.35GB/百万像素。
+    按「可用显存 = 总量 × 55%」反算，剩下 45% 留给系统、VapourSynth 帧缓存
+    和显存碎片。fp32 的激活值约翻倍，预算相应减半。
+    """
+    gb = _gpu_total_gb()
+    if gb <= 0:
+        return 1920 * 1080              # 探不到显卡时按 1080p 保守处理
+    per_mp = 1.35 if fp16 else 2.60     # GB / 百万像素
+    return int(gb * 0.55 / per_mp * 1_000_000)
+
+
 def process(cmd):
     input_path = cmd["input"]
     output = cmd["output"]
@@ -546,6 +569,42 @@ def process(cmd):
         if n_kept == n_before:
             emit({"ev": "log", "msg": "前进消重：没有检测到低于阈值的重复帧"})
 
+    # ---- GMFSS：按显存预算决定「先超分」还是「先补帧」----
+    # GMFSS 是 PyTorch 逐帧推理，显存占用与画面像素数近似成正比。
+    # 旧流程是「先超分到 4K → 在 4K 上补帧」，4K 单帧激活值就要 11GB，
+    # 8GB 卡必爆（CUDA out of memory tried to allocate 3.97GiB）。
+    # 现在：目标尺寸在预算内才先超分；超出则跳过 AI 超分，在原分辨率补帧，
+    # 最后由 ffmpeg 用 Lanczos 放大到目标尺寸。源本身超预算时先降采样。
+    if gmfss:
+        sw, sh = int(clip.width), int(clip.height)
+        ow = tw if tw > 0 else sw
+        oh = th if th > 0 else sh
+        budget = _gmfss_pixel_budget(bool(int(vfi.get("fp16", 1))))
+        emit({"ev": "log", "msg": "GMFSS：显存预算 %.1f MP（本机 %.1f GB）" % (
+            budget / 1e6, _gpu_total_gb())})
+        if sr and ow * oh <= budget:
+            emit({"ev": "log", "msg": "处理顺序：先超分 → 再补帧（%d×%d 在显存预算内）"
+                                       % (ow, oh)})
+            clip = _apply_sr(clip)
+            if int(clip.width) != ow or int(clip.height) != oh:
+                clip = CORE.resize.Lanczos(clip, width=ow, height=oh)
+        else:
+            if sr:
+                need = ow * oh / 1e6 * (1.35 if int(vfi.get("fp16", 1)) else 2.60)
+                emit({"ev": "log", "msg": "GMFSS：%d×%d 输出约需 %.1f GB 显存，超出本机预算"
+                                           % (ow, oh, need)})
+                emit({"ev": "log", "msg": "        本次跳过 AI 超分，改为「原分辨率补帧 → Lanczos 放大」"})
+                emit({"ev": "log", "msg": "        想同时保留 AI 超分：改用 RIFE 补帧，或把输出分辨率降到 1440p 以内"})
+            if sw * sh > budget:
+                k = (budget / float(sw * sh)) ** 0.5
+                nw = max(64, int(sw * k) // 2 * 2)
+                nh = max(64, int(sh * k) // 2 * 2)
+                emit({"ev": "log", "msg": "GMFSS：源 %d×%d 超出预算，先降到 %d×%d 补帧"
+                                           % (sw, sh, nw, nh)})
+                clip = CORE.resize.Lanczos(clip, width=nw, height=nh)
+        return _run_gmfss(clip, cmd, vfi, output, image_seq, input_path,
+                          cancel_file, out_size=(ow, oh))
+
     # 处理顺序：
     #   sr_first=True  → 先超分再补帧（SVFI 的做法）。超分只跑源帧（如 24fps），
     #                    补帧在清晰的高分辨率帧上做，光流更准、成本更低。
@@ -558,10 +617,9 @@ def process(cmd):
         # 补帧成本与像素数成正比，在 2160p 上补帧比在 1080p 上贵 4 倍。
         if tw > 0 and th > 0 and (tw != int(clip.width) or th != int(clip.height)):
             clip = CORE.resize.Lanczos(clip, width=tw, height=th)
-        if not gmfss:
-            clip = _apply_vfi(clip)
+        clip = _apply_vfi(clip)
     else:
-        if vfi and not gmfss:
+        if vfi:
             clip = _apply_vfi(clip)
         if sr:
             clip = _apply_sr(clip)
@@ -569,11 +627,6 @@ def process(cmd):
     if tw > 0 and th > 0 and (tw != int(clip.width) or th != int(clip.height)):
         # 缩回目标尺寸：用 Lanczos 高质量核（避免 Bicubic 造成的发糊）
         clip = CORE.resize.Lanczos(clip, width=tw, height=th)
-
-    if gmfss:
-        # GMFSS 不是 VapourSynth 滤镜（PyTorch 四段网络 + softsplat），
-        # 只能逐帧在 Python 里算，因此走独立的输出通路（rawvideo RGB24 → ffmpeg）。
-        return _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file)
 
     out_pix = cmd.get("out_pix") or "yuv420p10le"
     fmt = vs.YUV420P10 if "10" in out_pix else vs.YUV420P8
@@ -670,8 +723,13 @@ def _rgb_frame_u8(frame, w, h):
     return np.stack(planes, axis=-1).round().astype(np.uint8)
 
 
-def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
-    """GMFSS Fortuna Union 补帧：逐帧 Python 推理，直接写 rawvideo RGB24 给 ffmpeg。"""
+def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file,
+               out_size=None):
+    """GMFSS Fortuna Union 补帧：逐帧 Python 推理，直接写 rawvideo RGB24 给 ffmpeg。
+
+    out_size=(w, h) 时，补帧在原分辨率做，再由 ffmpeg 用 Lanczos 放大到目标尺寸
+    （4K 这类超出显存预算的输出走这条路，避免在 4K 上做光流推理把显存打爆）。
+    """
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import gmfss_engine
 
@@ -692,6 +750,9 @@ def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
 
     n = int(clip.num_frames)
     w, h = int(clip.width), int(clip.height)
+    ow, oh = (int(out_size[0]), int(out_size[1])) if out_size else (w, h)
+    ow = ow if ow > 0 else w
+    oh = oh if oh > 0 else h
     if n <= 0:
         raise RuntimeError("源没有可处理的帧")
     src_num, src_den = clip.fps_num, clip.fps_den
@@ -711,7 +772,7 @@ def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
         steps.append(j / ratio)
         j += 1
     total = n + (n - 1) * len(steps)
-    emit({"ev": "info", "width": w, "height": h, "frames": total,
+    emit({"ev": "info", "width": ow, "height": oh, "frames": total,
           "fps_num": out_num, "fps_den": out_den})
     emit({"ev": "log", "msg": "GMFSS：%d 帧 -> %d 帧（每对插 %d 帧，输出 %.2f fps）" % (
         n, total, len(steps), out_num / float(out_den))})
@@ -736,6 +797,10 @@ def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
     else:
         args += ["-map", "0:v:0"]
     args += ["-c:v", codec] + codec_args
+    if (ow, oh) != (w, h):
+        # 补帧分辨率与输出分辨率不同（4K 超出显存预算时）：交给 ffmpeg 做
+        # 高质量放大，Lanczos 比默认 bicubic 少一圈糊边。
+        args += ["-vf", "scale=%d:%d:flags=lanczos" % (ow, oh)]
     if image_seq:
         args += ["-f", "image2", "-start_number", "1", out_path]
     else:
@@ -785,12 +850,20 @@ def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
         _cleanup(output, image_seq, out_path)
         emit({"ev": "cancelled"})
         return
-    except Exception:
+    except Exception as ex:
         try:
             proc.kill()
         except Exception:
             pass
         _cleanup(output, image_seq, out_path)
+        # 显存不足时给一句能照着做的中文提示，别把 torch 的英文堆栈直接扔给用户
+        msg = str(ex)
+        if "out of memory" in msg.lower():
+            raise RuntimeError(
+                "GMFSS 显存不足。建议：\n"
+                "  · 把输出分辨率降到 1440p 以内，或改用 RIFE 补帧（显存占用低得多）\n"
+                "  · 关闭浏览器 / 游戏等占用显存的程序后重试\n"
+                "  · 4K + AI 超分 + GMFSS 在 8GB 显卡上做不到，程序会自动降级但仍可能失败")
         raise
     code = proc.wait()
     if code != 0:
