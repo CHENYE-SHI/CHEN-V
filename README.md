@@ -10,7 +10,7 @@ CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本�
 
 ## 功能特性
 
-- **补帧**：RIFE ncnn，把低帧率视频补到 60/120fps
+- **补帧**：RIFE ncnn，把低帧率视频补到 60/120fps；可选 **GMFSS Fortuna Union**（光流补帧，动漫/线条画质更好，速度较慢）
 - **超分**：Real-CUGAN / Real-ESRGAN（AnimeJaNai 等），最高 4K
 - **一键「超分并补帧」**：单次流水线完成两步
 - **批量队列**：多文件排队处理，进度实时显示
@@ -27,6 +27,16 @@ CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本�
 
 > 首次运行时若使用 TensorRT，需要为本机 GPU 构建引擎（每个模型 + 分辨率组合一次，约几分钟），后续即时加载。
 
+### 可选组件：GMFSS Fortuna Union
+
+GMFSS 走 PyTorch 推理，模型权重已内置，但 PyTorch 运行时约 2.8GB，单独按需安装：
+
+1. 双击程序目录里的 **`安装GMFSS组件.bat`**（会下载 torch CUDA 12.8 + numpy，10~40 分钟）
+2. 装完后重启 CHEN-V，「补帧模型」下拉框里出现 **GMFSS Fortuna Union（光流·画质）**
+
+速度参考（RTX 5060 Laptop，1080p fp16）：每帧约 1.0 秒，显存约 2.8GB。
+要求 NVIDIA 显卡 + 驱动支持 CUDA 12.8（50 系需要）；不装该组件不影响 RIFE 补帧。
+
 ## 系统要求
 
 - Windows 10 / 11（64 位）
@@ -37,7 +47,7 @@ CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本�
 
 本项目本体（`app/` 目录下的代码）采用 [MIT License](LICENSE)，免费使用与转载，**请勿收费转卖**。
 
-内嵌的第三方组件（Real-ESRGAN、Real-CUGAN、RIFE ncnn、FFmpeg、VapourSynth、TensorRT 等）各自遵循其原始许可，著作权归原作者所有。
+内嵌的第三方组件（Real-ESRGAN、Real-CUGAN、RIFE ncnn、GMFSS Fortuna（98mxr，MIT）、FFmpeg、VapourSynth、TensorRT 等）各自遵循其原始许可，著作权归原作者所有。
 
 ## 开发
 
