@@ -713,8 +713,8 @@ def _run_gmfss(clip, cmd, vfi, output, image_seq, input_path, cancel_file):
     total = n + (n - 1) * len(steps)
     emit({"ev": "info", "width": w, "height": h, "frames": total,
           "fps_num": out_num, "fps_den": out_den})
-    emit({"ev": "log", "msg": "GMFSS：%d 帧 -> %d 帧（每对插 %d 帧，%d×%.2f）" % (
-        n, total, len(steps), out_num, out_den)})
+    emit({"ev": "log", "msg": "GMFSS：%d 帧 -> %d 帧（每对插 %d 帧，输出 %.2f fps）" % (
+        n, total, len(steps), out_num / float(out_den))})
 
     ffmpeg = cmd["ffmpeg"]
     codec = cmd["codec"]
