@@ -884,6 +884,24 @@ _T.update({
               "本体には同梱されず、ユーザーが導入します。"},
 })
 
+_T.update({
+    "运行环境": {
+        "zh-TW": "執行環境", "en": "Runtime environment", "ja": "実行環境"},
+    "处理工具、模型与推理组件的状态，以及工具路径。": {
+        "zh-TW": "處理工具、模型與推理組件的狀態，以及工具路徑。",
+        "en": "Status of processing tools, models and inference components, plus tool paths.",
+        "ja": "処理ツール・モデル・推論コンポーネントの状態と、ツールのパス。"},
+    "工作目录、默认输出，以及界面外观。": {
+        "zh-TW": "工作目錄、預設輸出，以及介面外觀。",
+        "en": "Working directory, default output, and appearance.",
+        "ja": "作業ディレクトリ、既定の出力、そして外観。"},
+    "组件状态": {"zh-TW": "組件狀態", "en": "Component status", "ja": "コンポーネントの状態"},
+    "每次打开本页都会重新探测": {
+        "zh-TW": "每次開啟本頁都會重新偵測",
+        "en": "Re-checked every time this page opens",
+        "ja": "このページを開くたびに再検出します"},
+})
+
 # 反向索引：任意语言的译文 -> 简体中文 key（用于切换语言时还原）
 _REVERSE = {}
 for _key, _m in _T.items():

@@ -1418,7 +1418,7 @@ class MainWindow(QMainWindow):
         # 否则每换一个字符都可能触发一次系统字体扫描
         navs = [("超分补帧", "◆"), ("进度", "◎"),
                 ("官网更新", "→"), ("设置", "≡"),
-                ("界面美化", "◇"), ("硬件信息", "■"),
+                ("运行环境", "◇"), ("硬件信息", "■"),
                 ("关于", "⊙")]
         self.nav_buttons = {}
         for text, icon in navs:
@@ -1557,7 +1557,7 @@ class MainWindow(QMainWindow):
                     ("进度", self._build_progress_page),
                     ("官网更新", self._build_update_page),
                     ("设置", self._build_settings_page),
-                    ("界面美化", self._build_theme_page),
+                    ("运行环境", self._build_env_page),
                     ("硬件信息", self._build_hardware_page),
                     ("关于", self._build_about_page))
         total = len(builders)
@@ -2420,7 +2420,7 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(26, 22, 26, 22)
         v.setSpacing(12)
         v.addWidget(QLabel("设置", objectName="h1"))
-        v.addWidget(QLabel("工作目录、默认输出、运行环境与工具路径。", objectName="muted"))
+        v.addWidget(QLabel("工作目录、默认输出，以及界面外观。", objectName="muted"))
         card = Card()
 
         # 语言
@@ -2447,18 +2447,51 @@ class MainWindow(QMainWindow):
         dr.addWidget(b_out)
         card.v.addLayout(dr)
 
-        # 运行环境
+        v.addWidget(card)
+
+        # 界面美化并入本页（原独立页面已去掉）
+        self._theme_section(v)
+
+        # 保存按钮放页尾：主题/颜色是即时生效的，这里保存的是语言与输出目录
+        hb = QHBoxLayout()
+        hb.addStretch(1)
+        b_save = QPushButton("保存设置", objectName="primary")
+        b_save.clicked.connect(self._save_from_settings)
+        hb.addWidget(b_save)
+        v.addLayout(hb)
+        v.addSpacing(4)
+        v.addStretch(1)
+        return scroll
+
+    # ------------------------------------------------------------ 运行环境页
+    def _build_env_page(self):
+        """运行环境独立页：组件状态 + 工具路径 + 工作目录操作。"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        # 滚动条常驻：展开/收起工具路径时内容高度变化，若滚动条时有时无，
+        # 视口宽度会跟着变 10px，整页控件会横向重排一次，看着像闪一下。
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        page = QWidget()
+        scroll.setWidget(page)
+        v = QVBoxLayout(page)
+        v.setContentsMargins(26, 22, 26, 22)
+        v.setSpacing(12)
+        v.addWidget(QLabel("运行环境", objectName="h1"))
+        v.addWidget(QLabel("处理工具、模型与推理组件的状态，以及工具路径。", objectName="muted"))
+
+        card = Card()
         eh = QHBoxLayout()
         ev = QVBoxLayout()
         ev.setSpacing(2)
-        ev.addWidget(QLabel("运行环境", objectName="h2"))
-        ev.addWidget(QLabel("处理工具与组件状态", objectName="muted"))
+        ev.addWidget(QLabel("组件状态", objectName="h2"))
+        ev.addWidget(QLabel("每次打开本页都会重新探测", objectName="muted"))
         eh.addLayout(ev)
         eh.addStretch(1)
         b_check = QPushButton("检查")
         b_check.clicked.connect(self._check_tools)
         eh.addWidget(b_check)
         card.v.addLayout(eh)
+
         self.env_grid = QGridLayout()
         self.env_grid.setHorizontalSpacing(28)
         self.env_grid.setVerticalSpacing(14)
@@ -2485,25 +2518,17 @@ class MainWindow(QMainWindow):
         h.addWidget(b_open)
         h.addWidget(b_clear)
         h.addStretch(1)
-        b_save = QPushButton("保存设置", objectName="primary")
-        b_save.clicked.connect(self._save_from_settings)
-        h.addWidget(b_save)
         card.v.addLayout(h)
+
         v.addWidget(card)
         v.addStretch(1)
         self._rebuild_env()
         return scroll
 
-    # ------------------------------------------------------------ 界面美化页
-    def _build_theme_page(self):
-        """独立的界面美化页面：主题 + 颜色 + 字体 + 背景图 + 通透度 + 蒙版暗度。"""
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        page = QWidget()
-        scroll.setWidget(page)
-        v = QVBoxLayout(page)
-        v.setContentsMargins(26, 22, 26, 22)
-        v.setSpacing(12)
+    # ------------------------------------------------------ 界面美化（并入设置页）
+    def _theme_section(self, v):
+        """把界面美化内容挂到给定布局：主题 + 颜色 + 字体 + 背景图 + 通透度 + 蒙版暗度。"""
+        v.addSpacing(6)
         v.addWidget(QLabel("界面美化", objectName="h1"))
         v.addWidget(QLabel("主题、配色、字体与背景，打造你的专属界面。", objectName="muted"))
 
@@ -2692,9 +2717,7 @@ class MainWindow(QMainWindow):
         card.v.addWidget(QLabel("暗度越低背景越亮，越高背景越暗；配合通透度调整", objectName="hint"))
 
         v.addWidget(card)
-        v.addStretch(1)
         self._update_bg_label()
-        return scroll
 
     def _update_bg_label(self):
         if hasattr(self, "lbl_bg"):
