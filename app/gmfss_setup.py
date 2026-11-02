@@ -74,7 +74,7 @@ def main():
             "print('numpy', numpy.__version__, '| torch', torch.__version__,"
             "'| cuda', torch.cuda.is_available()); print(g.available())" % APP)
     run([VRT_PY, "-c", code])
-    print("\n完成。重启 CHEN-V，补帧模型里会出现「GMFSS Fortuna Union（光流·画质）」。")
+    print("\n完成。重启 CHEN-V，补帧模型里会出现「GMFSS Fortuna Union（光流·动漫）」。")
     return 0
 
 

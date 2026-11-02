@@ -913,6 +913,15 @@ _T.update({
         "ja": "UI 全体の文字サイズ（80%〜140%）。離すとすぐ反映。"},
 })
 
+_T.update({
+    "补帧模型：RIFE（真人/游戏、通用、高画质）与 GMFSS（动漫光流），选择后下方显示用途说明": {
+        "zh-TW": "補幀模型：RIFE（真人／遊戲、通用、高畫質）與 GMFSS（動漫光流），選擇後下方顯示用途說明",
+        "en": "Interpolation models: RIFE (live action/games, general, high quality) and "
+              "GMFSS (anime optical flow). Pick one to see its use case below.",
+        "ja": "補間モデル：RIFE（実写・ゲーム／汎用／高画質）と GMFSS（アニメ向けオプティカルフロー）。"
+              "選択すると下に用途が表示されます。"},
+})
+
 # 反向索引：任意语言的译文 -> 简体中文 key（用于切换语言时还原）
 _REVERSE = {}
 for _key, _m in _T.items():

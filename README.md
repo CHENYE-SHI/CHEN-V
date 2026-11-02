@@ -32,7 +32,7 @@ CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本�
 GMFSS 走 PyTorch 推理，模型权重已内置，但 PyTorch 运行时约 2.8GB，单独按需安装：
 
 1. 双击程序目录里的 **`安装GMFSS组件.bat`**（会下载 torch CUDA 12.8 + numpy，10~40 分钟）
-2. 装完后重启 CHEN-V，「补帧模型」下拉框里出现 **GMFSS Fortuna Union（光流·画质）**
+2. 装完后重启 CHEN-V，「补帧模型」下拉框里出现 **GMFSS Fortuna Union（光流·动漫）**
 
 速度参考（RTX 5060 Laptop，1080p fp16）：每帧约 1.0 秒，显存约 2.8GB。
 要求 NVIDIA 显卡 + 驱动支持 CUDA 12.8（50 系需要）；不装该组件不影响 RIFE 补帧。

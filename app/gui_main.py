@@ -116,9 +116,16 @@ def _fill_combo(cb, values, current=None):
     return cb
 
 
+# 下拉项改过名的兼容表：老设置/预设里存的是旧显示文本。
+# 模型条目后面会继续调整分类标签，每改一次就在这里登记一条，避免用户的选择被重置。
+_COMBO_ALIASES = {
+    "GMFSS Fortuna Union（光流·画质）": "GMFSS Fortuna Union（光流·动漫）",
+}
+
+
 def _combo_select(cb, val):
     """按中文原文选中下拉项：优先 itemData，其次显示文本（兼容没有 data 的下拉框）。"""
-    v = str(val)
+    v = _COMBO_ALIASES.get(str(val), str(val))
     i = cb.findData(v)
     if i < 0:
         i = cb.findText(v)
@@ -1007,7 +1014,7 @@ class MainWindow(QMainWindow):
             import gmfss_engine
             _ok, _why = gmfss_engine.available()
             if _ok:
-                _label = "GMFSS Fortuna Union（光流·画质）"
+                _label = "GMFSS Fortuna Union（光流·动漫）"
                 self.rife_map[_label] = {"model": gmfss_engine.WEIGHTS_DIR,
                                          "engine": "gmfss"}
                 self.rife_desc[_label] = ("动漫/线条优先：光流 + 融合网络，补出来的中间帧"
@@ -1887,7 +1894,7 @@ class MainWindow(QMainWindow):
         self.cb_vfi = QComboBox()
         _fill_combo(self.cb_vfi, list(self.rife_map) or ["（没有找到 RIFE 模型）"])
         self.cb_vfi.setMinimumWidth(150)
-        self.cb_vfi.setToolTip("RIFE 补帧模型：动漫向 / 真人游戏 / 高画质 heavy 等分类，悬停查看用途")
+        self.cb_vfi.setToolTip("补帧模型：RIFE（真人/游戏、通用、高画质）与 GMFSS（动漫光流），选择后下方显示用途说明")
         self.lbl_vfi_desc = QLabel("")
         self.lbl_vfi_desc.setObjectName("hint")
         self.lbl_vfi_desc.setWordWrap(True)
@@ -3803,6 +3810,9 @@ class MainWindow(QMainWindow):
             desc = (desc + "\n提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、"
                            "改用 Lanczos 放大；要 4K + AI 超分请改用 RIFE。")
         self.lbl_vfi_desc.setText(desc)
+        # 下拉框宽度有限，长名字会被省略号截掉；悬停时给出完整名称与用途
+        raw = self.rife_desc.get(name, "")
+        self.cb_vfi.setToolTip(("%s\n%s" % (name, _tl(raw))) if raw else name)
 
     def _sync_sr_desc(self):
         """根据当前选中的超分模型，更新用途说明文字。"""
