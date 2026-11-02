@@ -36,7 +36,7 @@ def _np_pil():
         _NP, _PIL = _n, _i
     return _NP, _PIL
 
-from PySide6.QtCore import Qt, QTimer, QSize, QRectF, Signal
+from PySide6.QtCore import Qt, QTimer, QSize, QRect, QPoint, QRectF, Signal
 from PySide6.QtGui import (QColor, QIcon, QPixmap, QFont, QFontDatabase, QPainter,
                            QPen, QBrush)
 from PySide6.QtWidgets import (
@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
     QListWidget, QListWidgetItem, QButtonGroup, QSizePolicy, QAbstractItemView,
     QSplitter, QRadioButton, QSlider, QColorDialog, QInputDialog,
-    QGraphicsDropShadowEffect, QDialog,
+    QGraphicsDropShadowEffect, QDialog, QLayout,
 )
 
 import paths
@@ -848,6 +848,75 @@ class GlassPanel(QFrame):
             p.drawLine(0, 0, self.width() - 1, 0)
 
 
+class FlowLayout(QLayout):
+    """自动换行的横向布局：控件按可用宽度从左到右排，放不下就换行。
+
+    参数卡的复选框用它：中文两列刚好，英文（字号 135% 时单条能到 520px）两列就
+    会超出左栏宽度、逼出横向滚动条。改成流式后按窗口宽度自动 1~3 列，既不撑宽
+    也不裁字。
+    """
+
+    def __init__(self, parent=None, h_spacing=22, v_spacing=6):
+        super().__init__(parent)
+        self._items = []
+        self._h = h_spacing
+        self._v = v_spacing
+        if parent is not None:
+            self.setContentsMargins(0, 0, 0, 0)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, i):
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i):
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self):
+        return Qt.Orientations(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        return size + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def _do_layout(self, rect, test_only):
+        m = self.contentsMargins()
+        eff = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        x, y, line_h = eff.x(), eff.y(), 0
+        for item in self._items:
+            hint = item.sizeHint()
+            w, h = hint.width(), hint.height()
+            if x + w > eff.right() + 1 and line_h > 0:
+                x = eff.x()
+                y += line_h + self._v
+                line_h = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), QSize(w, h)))
+            x += w + self._h
+            line_h = max(line_h, h)
+        return y + line_h - rect.y() + m.bottom()
+
+
 class Card(GlassPanel):
     def __init__(self, parent=None, name="card"):
         super().__init__(name, parent)
@@ -1442,7 +1511,8 @@ class MainWindow(QMainWindow):
         head.addWidget(logo)
         head.addStretch(1)
         v.addLayout(head)
-        sub = QLabel("CHEN-V  ·  版本 %s" % APP_VERSION, objectName="logoSub")
+        sub = QLabel(_tl("CHEN-V  ·  版本 %s") % APP_VERSION, objectName="logoSub")
+        sub.setProperty("i18n_version", True)
         v.addWidget(sub)
         v.addSpacing(14)
 
@@ -1680,8 +1750,14 @@ class MainWindow(QMainWindow):
         title_row.setSpacing(8)
         tv = QVBoxLayout()
         tv.setSpacing(2)
-        tv.addWidget(QLabel("创建增强任务", objectName="h1"))
-        tv.addWidget(QLabel("左边调参数，右边拉素材；设置后点开始处理。", objectName="muted"))
+        # 标题/副标题允许换行：英文标题比中文长得多，不允许折行会把整行最小宽度
+        # 顶到 900px 以上（预设按钮那一排是固定宽度），默认窗口就出横向滚动条。
+        _t1 = QLabel("创建增强任务", objectName="h1")
+        _t1.setWordWrap(True)
+        _t2 = QLabel("左边调参数，右边拉素材；设置后点开始处理。", objectName="muted")
+        _t2.setWordWrap(True)
+        tv.addWidget(_t1)
+        tv.addWidget(_t2)
         title_row.addLayout(tv)
         title_row.addStretch(1)
 
@@ -1931,6 +2007,10 @@ class MainWindow(QMainWindow):
         self.sp_fps.setRange(8, 480)
         self.sp_fps.setSuffix(" fps")
         self.sp_fps.setValue(120)
+        # 帧率框不跟着字号无限变宽：英文界面 135% 时它会把「输出帧率」这一列
+        # 撑到 300px，挤掉左栏宽度
+        self.sp_fps.setMaximumWidth(110)
+        self.sp_fps.setMinimumWidth(90)
         self.sp_fps.setEnabled(False)
         self.sp_fps.setToolTip("目标输出帧率：60 流畅、120 顺滑。帧率越高帧数越多，\n"
                                "耗时和体积成正比增加，建议按素材类型选择")
@@ -2075,11 +2155,17 @@ class MainWindow(QMainWindow):
         ]
         r = 0
         for l1, w1, l2, w2 in rows:
+            # 标签允许换行：英文标签（Output resolution / Interpolation model）比中文长一倍，
+            # 不让它按整串撑列宽，窗口窄/字号大时自动折成两行，而不是逼出横向滚动条。
             if l1:
-                g.addWidget(QLabel(l1, objectName="muted"), r, 0)
+                _lb1 = QLabel(l1, objectName="muted")
+                _lb1.setWordWrap(True)
+                g.addWidget(_lb1, r, 0)
             g.addWidget(w1, r, 1)
             if l2:
-                g.addWidget(QLabel(l2, objectName="muted"), r, 2)
+                _lb2 = QLabel(l2, objectName="muted")
+                _lb2.setWordWrap(True)
+                g.addWidget(_lb2, r, 2)
             g.addWidget(w2, r, 3)
             r += 1
         # 参数区的下拉框不能按「最长选项」撑宽度：GMFSS Fortuna Union（光流·动漫）
@@ -2090,28 +2176,24 @@ class MainWindow(QMainWindow):
                     self.cb_tile):
             _cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             _cb.setMinimumContentsLength(10)
-            _cb.setMinimumWidth(150)
-        chk = QGridLayout()
-        chk.setHorizontalSpacing(22)
-        chk.setVerticalSpacing(6)
-        # 复选框排 2 列而不是 3 列：3 列时三列的最长文字（"先超分 → 再补帧（更快，推荐）"、
-        # "超分按输出分辨率（更快）"、"TensorRT 加速（NVIDIA 显卡）"）加起来会把参数卡
-        # 最小宽度顶到 690px，默认窗口（左栏约 600px）就会冒出横向滚动条。
-        # 2 列最宽约 460px，任何正常窗口宽度下都不会出现横向滚动条。
-        for _i, w in enumerate((self.chk_two, self.chk_workres, self.chk_trt,
-                                self.chk_keep, self.dedup_wrap, self.chk_scene,
-                                self.chk_hw, self.chk_turbo)):
-            chk.addWidget(w, _i // 2, _i % 2)
-        chk.setColumnStretch(0, 1)
-        chk.setColumnStretch(1, 1)
+            _cb.setMinimumWidth(145)
+        # 复选框用流式布局：按左栏实际宽度自动换行（中文 2 列、英文 1~2 列），
+        # 不会像固定 3/2 列那样把卡片最小宽度撑到超出视口、逼出横向滚动条。
+        chk = FlowLayout(h_spacing=22, v_spacing=6)
+        for w in (self.chk_two, self.chk_workres, self.chk_trt,
+                  self.chk_keep, self.dedup_wrap, self.chk_scene,
+                  self.chk_hw, self.chk_turbo):
+            chk.addWidget(w)
         g.addWidget(self.lbl_sr_desc, r, 0, 1, 4)
         r += 1
         g.addWidget(self.lbl_vfi_desc, r, 0, 1, 4)
         r += 1
-        g.addLayout(chk, r, 0, 1, 4)
         g.setColumnStretch(1, 1)
         g.setColumnStretch(3, 1)
         card.v.addLayout(g)
+        # 复选框放在网格外侧：QGridLayout 对跨列的子布局会按列分配最小宽度，
+        # 把流式布局的 520px 最小宽度重复算进每一列，卡片反而更宽。
+        card.v.addLayout(chk)
 
         for cb in (self.cb_sr, self.cb_vfi, self.cb_enc):
             cb.currentIndexChanged.connect(lambda _=0: self._refresh_table())
@@ -2318,26 +2400,27 @@ class MainWindow(QMainWindow):
         updater.check_updates(local_ver, _done, lang=lang_code)
 
     def _apply_update_state(self, st):
+        self._last_update_state = st
         """把检查结果写回界面（必须在主线程调用）。"""
         if not hasattr(self, "lbl_update_state"):
             return
         self.b_check.setEnabled(True)
-        self.b_check.setText("检查更新")
+        self.b_check.setText(_tl("检查更新"))
 
         # 版本
         if st.error and st.latest_ver is None:
-            self.lbl_update_state.setText(
+            self.lbl_update_state.setText(_tl(
                 "检查失败：无法连接更新源。\n"
-                "可能是网络问题或更新源暂不可用，稍后再试即可。")
+                "可能是网络问题或更新源暂不可用，稍后再试即可。"))
             self.lbl_update_state.setObjectName("muted")
         elif st.has_update:
-            self.lbl_update_state.setText(
+            self.lbl_update_state.setText(_tl(
                 "发现新版本 %s（当前 %s）。\n"
-                "点击下方按钮前往 GitHub 下载。" % (st.latest_tag, APP_VERSION))
+                "点击下方按钮前往 GitHub 下载。") % (st.latest_tag, APP_VERSION))
             self.lbl_update_state.setObjectName("hint")
         else:
             self.lbl_update_state.setText(
-                "已是最新版本（%s）。" % APP_VERSION)
+                _tl("已是最新版本（%s）。") % APP_VERSION)
             self.lbl_update_state.setObjectName("muted")
         self.lbl_update_state.style().unpolish(self.lbl_update_state)
         self.lbl_update_state.style().polish(self.lbl_update_state)
@@ -2831,11 +2914,11 @@ class MainWindow(QMainWindow):
             v = self.setting.get("bg_video", "")
             p = self.setting.get("bg", "")
             if v and os.path.isfile(v):
-                self.lbl_bg.setText("● 已设置视频背景")
+                self.lbl_bg.setText(_tl("● 已设置视频背景"))
             elif p and os.path.isfile(p):
-                self.lbl_bg.setText("● 已设置背景图")
+                self.lbl_bg.setText(_tl("● 已设置背景图"))
             else:
-                self.lbl_bg.setText("● 未设置背景图")
+                self.lbl_bg.setText(_tl("● 未设置背景图"))
 
     # 通透度拖动：只更新数值 + 标签，样式表通过节流定时器延迟刷新，避免卡顿
     def _on_glass_changed(self, val):
@@ -3466,7 +3549,12 @@ class MainWindow(QMainWindow):
             if id(w) not in seen:
                 seen.add(id(w))
                 ordered.append(w)
+        from PySide6.QtWidgets import QLineEdit as _QLE
         for w in ordered:
+            if isinstance(w, _QLE):
+                _ph = w.placeholderText()
+                if _ph:
+                    w.setPlaceholderText(_i18n.translate(_ph))
             if isinstance(w, QLabel):
                 _k = w.property("i18n_key")
                 if _k:
@@ -3475,6 +3563,8 @@ class MainWindow(QMainWindow):
                 elif w.property("i18n_build"):
                     # 带版本号的构建信息，插值后无法整串查表，按模板重组
                     w.setText(_tl("构建：%s") % BUILD)
+                elif w.property("i18n_version"):
+                    w.setText(_tl("CHEN-V  ·  版本 %s") % APP_VERSION)
                 else:
                     w.setText(_i18n.translate(w.text()))
             elif isinstance(w, QPushButton):
@@ -3509,6 +3599,21 @@ class MainWindow(QMainWindow):
             # 按钮文字带 ▾/▴ 箭头，整串查不到译文，按当前展开状态重新拼一次
             self.btn_paths.setText(_tl("工具路径（高级）")
                                    + ("  ▴" if self.paths_panel.isVisible() else "  ▾"))
+        if hasattr(self, "table"):
+            self.table.setHorizontalHeaderLabels(
+                [_tl(x) for x in ("文件", "模式", "模型", "状态", "进度")])
+            if self.items:
+                self._refresh_table()
+        # 动态状态文字（队列结束 / 更新检查结果）切语言后要按模板重建
+        fin = getattr(self, "_queue_finished", None)
+        if fin:
+            ok, total, bad = fin
+            self.lbl_cur.setText(
+                (_tl("队列结束：完成 %d / %d（失败 %d）") % (ok, total, bad)) if bad
+                else (_tl("队列结束：完成 %d / %d") % (ok, total)))
+        last = getattr(self, "_last_update_state", None)
+        if last is not None:
+            self._apply_update_state(last)
         if hasattr(self, "cb_sr"):
             self._sync_sr_desc()
             self._sync_vfi_desc()
@@ -3684,9 +3789,9 @@ class MainWindow(QMainWindow):
                 self.table.setItem(i, 0, QTableWidgetItem(name))
                 self.table.item(i, 0).setToolTip(it["path"])
                 mode = self._eff_mode(it)
-                self.table.setItem(i, 1, QTableWidgetItem(mode))
+                self.table.setItem(i, 1, QTableWidgetItem(_tl(mode)))
                 self.table.setItem(i, 2, QTableWidgetItem(self._model_text(mode)))
-                st = QTableWidgetItem(it.get("status", "等待"))
+                st = QTableWidgetItem(_tl(it.get("status", "等待")))
                 st.setForeground(self._status_color(it.get("status", "等待")))
                 self.table.setItem(i, 3, st)
                 bar = QProgressBar()
@@ -3836,12 +3941,14 @@ class MainWindow(QMainWindow):
         # 提前在这里讲清楚，免得用户以为是画质变差或程序出错。
         if self.rife_map.get(name, {}).get("engine") == "gmfss" \
                 and getattr(self, "mode", "") != MODE_VFI:
-            desc = (desc + "\n提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、"
-                           "改用 Lanczos 放大；要 4K + AI 超分请改用 RIFE。")
+            desc = (desc + "\n" + _tl(
+                "提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、"
+                "改用 Lanczos 放大；要 4K + AI 超分请改用 RIFE。"))
         self.lbl_vfi_desc.setText(desc)
         # 下拉框宽度有限，长名字会被省略号截掉；悬停时给出完整名称与用途
         raw = self.rife_desc.get(name, "")
-        self.cb_vfi.setToolTip(("%s\n%s" % (name, _tl(raw))) if raw else name)
+        shown = self.cb_vfi.currentText() or name
+        self.cb_vfi.setToolTip(("%s\n%s" % (shown, _tl(raw))) if raw else shown)
 
     def _sync_sr_desc(self):
         """根据当前选中的超分模型，更新用途说明文字。"""
@@ -4136,6 +4243,7 @@ class MainWindow(QMainWindow):
         self._sync_mode()
 
     def _start_queue(self):
+        self._queue_finished = None      # 新任务开始，清掉上一轮的「队列结束」缓存
         if self.running:
             return
         if not self.items:
@@ -4687,7 +4795,7 @@ class MainWindow(QMainWindow):
                 elif kind == "current":
                     idx, name, total = m[1], m[2], m[3]
                     self.cur_item = idx
-                    self.lbl_cur.setText("第 %d/%d 个：%s" % (idx + 1, len(self.items), name))
+                    self.lbl_cur.setText(_tl("第 %d/%d 个：%s") % (idx + 1, len(self.items), name))
                     self._stage_busy(False)
                     self.pb_main.setValue(0)
                 elif kind == "kstatus":
@@ -4729,11 +4837,13 @@ class MainWindow(QMainWindow):
                     # 队列结束把进度条归零：否则中途失败会把 80% 这种数字一直留在界面上，
                     # 看着像任务还卡在那里没结束。
                     self.pb_main.setValue(0)
+                    self._queue_finished = (ok, len(self.items), bad)
                     if bad:
-                        self.lbl_cur.setText("队列结束：完成 %d / %d（失败 %d）"
+                        self.lbl_cur.setText(_tl("队列结束：完成 %d / %d（失败 %d）")
                                              % (ok, len(self.items), bad))
                     else:
-                        self.lbl_cur.setText("队列结束：完成 %d / %d" % (ok, len(self.items)))
+                        self.lbl_cur.setText(_tl("队列结束：完成 %d / %d")
+                                             % (ok, len(self.items)))
         except queue.Empty:
             pass
 

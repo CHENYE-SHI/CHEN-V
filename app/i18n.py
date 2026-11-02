@@ -33,7 +33,7 @@ _T = {
     "日本語": {"zh-TW": "日本語", "en": "Japanese", "ja": "日本語"},
 
     # 导航 / 页面
-    "超分补帧": {"zh-TW": "超分補幀", "en": "Super-res + Interp", "ja": "超解像と補間"},
+    "超分补帧": {"zh-TW": "超分補幀", "en": "Super-res", "ja": "超解像と補間"},
     "进度": {"zh-TW": "進度", "en": "Progress", "ja": "進捗"},
     "官网更新": {"zh-TW": "官網更新", "en": "Updates", "ja": "アップデート"},
     "设置": {"zh-TW": "設置", "en": "Settings", "ja": "設定"},
@@ -42,7 +42,7 @@ _T = {
     "界面美化": {"zh-TW": "介面美化", "en": "Appearance", "ja": "外観"},
 
     # 任务页
-    "创建增强任务": {"zh-TW": "創建增強任務", "en": "Create Enhancement Task", "ja": "拡張タスクの作成"},
+    "创建增强任务": {"zh-TW": "創建增強任務", "en": "New Task", "ja": "タスク作成"},
     "左边调参数，右边拉素材；设置后点开始处理。": {
         "zh-TW": "左邊調參數，右邊拉素材；設置後點開始處理。",
         "en": "Tune parameters on the left, add media on the right, then start.",
@@ -57,8 +57,8 @@ _T = {
     "浏览": {"zh-TW": "瀏覽", "en": "Browse", "ja": "参照"},
     "自动文件名": {"zh-TW": "自動文件名", "en": "Auto filename", "ja": "自動ファイル名"},
     "处理设置": {"zh-TW": "處理設置", "en": "Processing Settings", "ja": "処理設定"},
-    "按倍率": {"zh-TW": "按倍率", "en": "By multiplier", "ja": "倍率指定"},
-    "按输出帧率": {"zh-TW": "按輸出幀率", "en": "By output FPS", "ja": "出力FPS指定"},
+    "按倍率": {"zh-TW": "按倍率", "en": "Multiplier", "ja": "倍率指定"},
+    "按输出帧率": {"zh-TW": "按輸出幀率", "en": "Output FPS", "ja": "出力FPS指定"},
     "编码器": {"zh-TW": "編碼器", "en": "Encoder", "ja": "エンコーダー"},
     "CRF / Mbps": {"zh-TW": "CRF / Mbps", "en": "CRF / Mbps", "ja": "CRF / Mbps"},
     "两段式：先补帧再超分": {"zh-TW": "兩段式：先補幀再超分", "en": "Two-pass: interp then upscale", "ja": "二段階：補間→超解像"},
@@ -160,7 +160,7 @@ _T = {
     "打开": {"zh-TW": "打開", "en": "Open", "ja": "開く"},
 
     # 硬件信息
-    "硬件信息": {"zh-TW": "硬件信息", "en": "Hardware Info", "ja": "ハードウェア情報"},
+    "硬件信息": {"zh-TW": "硬體資訊", "en": "Hardware Info", "ja": "ハードウェア"},
     "系统": {"zh-TW": "系統", "en": "System", "ja": "システム"},
     "处理器": {"zh-TW": "處理器", "en": "CPU", "ja": "CPU"},
     "内存": {"zh-TW": "內存", "en": "Memory", "ja": "メモリ"},
@@ -260,7 +260,7 @@ _T = {
     "环境：检查中…": {"zh-TW": "環境：檢查中…", "en": "Env: checking…", "ja": "環境：確認中…"},
 
     # 其它
-    "补帧 + 超分 · 本地版": {"zh-TW": "補幀 + 超分 · 本地版", "en": "Frame Interp + Upscale · Local", "ja": "補間＋超解像 · ローカル版"},
+    "补帧 + 超分 · 本地版": {"zh-TW": "補幀 + 超分 · 本地版", "en": "Interp + Upscale", "ja": "補間＋超解像"},
     "● 已配置": {"zh-TW": "● 已配置", "en": "● Ready", "ja": "● 設定済み"},
     "● 未配置": {"zh-TW": "● 未配置", "en": "● Missing", "ja": "● 未設定"},
     "语言": {"zh-TW": "語言", "en": "Language", "ja": "言語"},
@@ -539,9 +539,9 @@ _T = {
     "输出分辨率": {"zh-TW": "輸出解析度", "en": "Output resolution", "ja": "出力解像度"},
     "输出格式": {"zh-TW": "輸出格式", "en": "Output format", "ja": "出力形式"},
     "分块": {"zh-TW": "分塊", "en": "Tile size", "ja": "タイルサイズ"},
-    "开始队列": {"zh-TW": "開始隊列", "en": "Start queue", "ja": "キュー開始"},
-    "共 %d 个素材": {"zh-TW": "共 %d 個素材", "en": "%d items", "ja": "素材 %d 件"},
-    "已选择 %d 个素材": {"zh-TW": "已選擇 %d 個素材", "en": "%d items selected", "ja": "素材 %d 件を選択"},
+    "开始队列": {"zh-TW": "開始隊列", "en": "Start", "ja": "開始"},
+    "共 %d 个素材": {"zh-TW": "共 %d 個素材", "en": "%d item(s)", "ja": "素材 %d 件"},
+    "已选择 %d 个素材": {"zh-TW": "已選擇 %d 個素材", "en": "%d item(s) selected", "ja": "素材 %d 件を選択"},
     "构建：%s": {"zh-TW": "構建：%s", "en": "Build: %s", "ja": "ビルド：%s"},
     "哔哩哔哩主页": {"zh-TW": "嗶哩嗶哩主頁", "en": "bilibili page", "ja": "bilibili ページ"},
     "GitHub 官网": {"zh-TW": "GitHub 官網", "en": "GitHub", "ja": "GitHub"},
@@ -886,7 +886,7 @@ _T.update({
 
 _T.update({
     "运行环境": {
-        "zh-TW": "執行環境", "en": "Runtime environment", "ja": "実行環境"},
+        "zh-TW": "執行環境", "en": "Runtime", "ja": "実行環境"},
     "处理工具、模型与推理组件的状态，以及工具路径。": {
         "zh-TW": "處理工具、模型與推理組件的狀態，以及工具路徑。",
         "en": "Status of processing tools, models and inference components, plus tool paths.",
@@ -925,6 +925,89 @@ _T.update({
 _T.update({
     "清空": {"zh-TW": "清空", "en": "Clear", "ja": "クリア"},
     "移除": {"zh-TW": "移除", "en": "Remove", "ja": "削除"},
+})
+
+_T.update({
+    # ---- 界面补漏（语言切换后仍是中文的项）----
+    "描边颜色": {"zh-TW": "描邊顏色", "en": "Border color", "ja": "縁取りの色"},
+    "跟随主题": {"zh-TW": "跟隨主題", "en": "Follow theme", "ja": "テーマに合わせる"},
+    "字体大小": {"zh-TW": "字體大小", "en": "Font size", "ja": "文字サイズ"},
+    "检查新版本、查看作者公告；更新源为 GitHub。": {
+        "zh-TW": "檢查新版本、查看作者公告；更新來源為 GitHub。",
+        "en": "Check for new versions and announcements. Source: GitHub.",
+        "ja": "新バージョンとお知らせを確認します。取得元は GitHub。"},
+    "尚未检查更新。": {
+        "zh-TW": "尚未檢查更新。", "en": "Not checked yet.", "ja": "まだ確認していません。"},
+    "文件": {"zh-TW": "檔案", "en": "File", "ja": "ファイル"},
+    "模式": {"zh-TW": "模式", "en": "Mode", "ja": "モード"},
+    "模型": {"zh-TW": "模型", "en": "Model", "ja": "モデル"},
+    "状态": {"zh-TW": "狀態", "en": "Status", "ja": "状態"},
+    "等待": {"zh-TW": "等待", "en": "Pending", "ja": "待機"},
+    "处理中": {"zh-TW": "處理中", "en": "Processing", "ja": "処理中"},
+    "完成": {"zh-TW": "完成", "en": "Done", "ja": "完了"},
+    "失败": {"zh-TW": "失敗", "en": "Failed", "ja": "失敗"},
+    "● 已设置视频背景": {
+        "zh-TW": "● 已設定影片背景", "en": "● Video background set", "ja": "● 動画背景を設定済み"},
+    "按主题自动取反色：浅色主题用白描边，深色/紫色主题用黑描边": {
+        "zh-TW": "按主題自動取反色：淺色主題用白描邊，深色／紫色主題用黑描邊",
+        "en": "Auto contrast: white outline on light themes, black on dark/purple.",
+        "ja": "テーマに応じて自動反転：ライトは白、ダーク／紫は黒の縁取り。"},
+    "动漫/线条优先：光流 + 融合网络，补出来的中间帧比 RIFE 更稳，代价是慢 3~8 倍": {
+        "zh-TW": "動漫／線條優先：光流 + 融合網路，補出來的中間幀比 RIFE 更穩，代價是慢 3~8 倍",
+        "en": "Anime / line art first: optical flow + fusion net. Steadier in-between "
+              "frames than RIFE, at 3-8x the cost.",
+        "ja": "アニメ・線画向け：オプティカルフロー＋融合ネット。RIFE より中間フレームが"
+              "安定する代わりに 3〜8 倍遅い。"},
+    "提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、改用 Lanczos 放大；"
+    "要 4K + AI 超分请改用 RIFE。": {
+        "zh-TW": "提示：GMFSS 顯示記憶體佔用高。輸出 4K 時會自動跳過 AI 超分、"
+                 "改用 Lanczos 放大；要 4K + AI 超分請改用 RIFE。",
+        "en": "Note: GMFSS uses a lot of VRAM. For 4K output the app skips AI upscaling "
+              "and uses Lanczos instead; for 4K + AI upscaling, use RIFE.",
+        "ja": "ヒント：GMFSS は VRAM 使用量が多いです。4K 出力時は AI 超解像を自動で"
+              "スキップし Lanczos 拡大に切り替えます。4K＋AI 超解像なら RIFE を。"},
+    "GMFSS Fortuna Union（光流·动漫）": {
+        "zh-TW": "GMFSS Fortuna Union（光流·動漫）",
+        "en": "GMFSS Fortuna Union (optical flow · anime)",
+        "ja": "GMFSS Fortuna Union（オプティカルフロー・アニメ）"},
+    # ---- 动态状态（带 %s / %d 的模板，代码里先 _tl 再格式化）----
+    "已是最新版本（%s）。": {
+        "zh-TW": "已是最新版本（%s）。", "en": "Up to date (%s).", "ja": "最新バージョンです（%s）。"},
+    "发现新版本 %s（当前 %s）。\n点击下方按钮前往 GitHub 下载。": {
+        "zh-TW": "發現新版本 %s（目前 %s）。\n點擊下方按鈕前往 GitHub 下載。",
+        "en": "New version %s available (current %s).\nUse the button below to download from GitHub.",
+        "ja": "新しいバージョン %s があります（現在 %s）。\n下のボタンから GitHub で取得してください。"},
+    "检查失败：无法连接更新源。\n可能是网络问题或更新源暂不可用，稍后再试即可。": {
+        "zh-TW": "檢查失敗：無法連線更新來源。\n可能是網路問題或更新來源暫時不可用，稍後再試即可。",
+        "en": "Check failed: cannot reach the update source.\n"
+              "This may be a network issue or the source is temporarily unavailable.",
+        "ja": "確認失敗：更新元に接続できません。\n"
+              "ネットワークの問題か、更新元が一時的に利用できない可能性があります。"},
+    "队列结束：完成 %d / %d": {
+        "zh-TW": "隊列結束：完成 %d / %d",
+        "en": "Queue finished: %d / %d completed",
+        "ja": "キュー終了：完了 %d / %d"},
+    "队列结束：完成 %d / %d（失败 %d）": {
+        "zh-TW": "隊列結束：完成 %d / %d（失敗 %d）",
+        "en": "Queue finished: %d / %d completed (%d failed)",
+        "ja": "キュー終了：完了 %d / %d（失敗 %d）"},
+    "留空 = 源目录": {
+        "zh-TW": "留空 = 來源目錄", "en": "Empty = source folder", "ja": "空欄 = 元フォルダ"},
+    "留空 = 素材所在目录": {
+        "zh-TW": "留空 = 素材所在目錄", "en": "Empty = folder of the source",
+        "ja": "空欄 = 素材のあるフォルダ"},
+    "自动（源文件名_模式）；可填自定义后缀": {
+        "zh-TW": "自動（來源檔名_模式）；可填自訂後綴",
+        "en": "Auto (source name_mode); optional custom suffix",
+        "ja": "自動（元ファイル名_モード）。任意の接尾辞も可"},
+    "搜索壁纸文件名…": {"zh-TW": "搜尋壁紙檔名…", "en": "Search wallpaper files…",
+                    "ja": "壁紙ファイルを検索…"},
+    "输入关键字搜索字体…": {"zh-TW": "輸入關鍵字搜尋字體…", "en": "Type to search fonts…",
+                     "ja": "キーワードでフォント検索…"},
+    "第 %d/%d 个：%s": {
+        "zh-TW": "第 %d/%d 個：%s", "en": "Item %d/%d: %s", "ja": "%d/%d 件目：%s"},
+    "CHEN-V  ·  版本 %s": {
+        "zh-TW": "CHEN-V  ·  版本 %s", "en": "CHEN-V  ·  version %s", "ja": "CHEN-V  ·  バージョン %s"},
 })
 
 # 反向索引：任意语言的译文 -> 简体中文 key（用于切换语言时还原）
