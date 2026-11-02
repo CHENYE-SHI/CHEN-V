@@ -350,7 +350,7 @@ def _rgba_css(rgb, a):
 
 
 def _make_qss(theme="浅色", font="Microsoft YaHei UI",
-              accent=None, text_color=None, glass=0.0):
+              accent=None, text_color=None, glass=0.0, scale=1.0):
     colors = THEMES.get(theme, THEMES["浅色"])
     # 深色主题用深色半透明卡片，浅色主题用浅色半透明卡片，让自定义背景能透出
     is_dark = theme == "深色"
@@ -393,7 +393,17 @@ def _make_qss(theme="浅色", font="Microsoft YaHei UI",
     # 供自绘容器（卡片/侧栏/拖放区/分段/状态栏）读取当前生效的颜色
     _PAINT["colors"] = dict(colors)
     _PAINT["glass"] = ga
-    return _QSS_TEMPLATE.format(font=font, **colors)
+    qss = _QSS_TEMPLATE.format(font=font, **colors)
+    # 界面字号缩放：模板里的 font-size 全是 px，这里统一按比例缩放
+    try:
+        sc = max(0.75, min(1.6, float(scale)))
+    except Exception:
+        sc = 1.0
+    if abs(sc - 1.0) > 0.001:
+        qss = re.sub(r"font-size:\s*(\d+)px",
+                     lambda m: "font-size: %dpx" % max(9, int(round(int(m.group(1)) * sc))),
+                     qss)
+    return qss
 
 
 def _alpha(hex_color, a):
@@ -878,6 +888,10 @@ class MainWindow(QMainWindow):
         except Exception:
             self.glass = 0.0
         self.text_outline = int(self.setting.get("text_outline", 0))
+        # 描边颜色：空 = 跟随主题（浅色主题白描边 / 深色主题黑描边）
+        self.outline_color = self.setting.get("outline_color", "")
+        # 界面字号缩放：80~140（%），影响 QSS 里所有 font-size
+        self.font_scale = max(0.8, min(1.4, float(self.setting.get("font_scale", 100)) / 100.0))
         _i18n.set_lang(self.setting.get("lang", "zh-CN"))
         # 通透度滑块：拖动时容器自绘即时预览，停手 1.5 秒再统一提交样式表 + 写盘
         self._glass_timer = QTimer(self)
@@ -1060,6 +1074,8 @@ class MainWindow(QMainWindow):
             d["accent_color"] = self.setting.get("accent_color", "")
             d["text_color"] = self.setting.get("text_color", "")
             d["text_outline"] = getattr(self, "text_outline", 0)
+            d["outline_color"] = getattr(self, "outline_color", "")
+            d["font_scale"] = int(round(float(getattr(self, "font_scale", 1.0)) * 100))
             d["lang"] = self.setting.get("lang", "zh-CN")
             if hasattr(self, "cb_font"):
                 d["font"] = self.cb_font.currentText()
@@ -1253,19 +1269,19 @@ class MainWindow(QMainWindow):
     def _apply_text_shadow(self, enabled):
         """根据描边强度给文字加半透明描边阴影，保证在复杂背景上可读。
 
-        enabled 为整数强度 0~10（0=关闭，越大描边越明显）。
+        enabled 为整数强度 0~30（0=关闭，越大描边越明显）。
         """
         root = self.centralWidget()
         if root is None:
             return
         level = int(enabled) if enabled is not None else 0
-        # 描边颜色随主题：浅色主题文字为深色，用浅色描边在深色壁纸上分离；
-        # 深色/紫色主题文字为浅色，用深色描边。
+        # 描边颜色：优先用自定义色；留空则跟随主题
+        # （浅色主题文字深 → 白描边；深色/紫色主题文字浅 → 黑描边）
         theme = getattr(self, "theme", "浅色")
-        if theme == "浅色":
-            outline = QColor(255, 255, 255)
-        else:
-            outline = QColor(0, 0, 0)
+        default = QColor(255, 255, 255) if theme == "浅色" else QColor(0, 0, 0)
+        outline = QColor(getattr(self, "outline_color", "") or "")
+        if not outline.isValid():
+            outline = default
         for w in root.findChildren(QLabel):
             if level <= 0:
                 # setGraphicsEffect(None) 时 Qt 会自行销毁旧 effect，不要再手动 delete
@@ -1275,9 +1291,15 @@ class MainWindow(QMainWindow):
             if not isinstance(sh, QGraphicsDropShadowEffect):
                 sh = QGraphicsDropShadowEffect(self)
                 w.setGraphicsEffect(sh)
-            # 描边强度映射：强度越高，模糊半径越小（越锐利）、透明度越高
-            blur = max(1, 7 - level)          # level 1→6, level 10→1
-            alpha = min(255, 90 + level * 15)  # level 1→105, level 10→240
+            # 描边强度映射：
+            #   1~10  保持原有手感——越强越锐利、越不透明
+            #   11~30 已经在满不透明度，继续加大模糊半径把光晕调粗
+            if level <= 10:
+                blur = max(1, 7 - level)            # 1→6, 10→1
+                alpha = min(255, 90 + level * 15)   # 1→105, 10→240
+            else:
+                blur = 1 + (level - 10) * 0.35      # 11→1.35, 30→8
+                alpha = 255
             sh.setOffset(0, 0)
             sh.setBlurRadius(blur)
             sh.setColor(QColor(outline.red(), outline.green(), outline.blue(), alpha))
@@ -2605,7 +2627,9 @@ class MainWindow(QMainWindow):
         outline_row.setSpacing(10)
         outline_row.addWidget(QLabel("字体描边", objectName="muted"))
         self.sl_outline = QSlider(Qt.Horizontal)
-        self.sl_outline.setRange(0, 10)
+        self.sl_outline.setRange(0, 30)
+        self.sl_outline.setSingleStep(1)
+        self.sl_outline.setPageStep(5)
         self.sl_outline.setValue(int(getattr(self, "text_outline", 0)))
         self.sl_outline.valueChanged.connect(self._apply_text_outline)
         self.sl_outline.sliderReleased.connect(self._on_outline_released)
@@ -2615,6 +2639,23 @@ class MainWindow(QMainWindow):
         outline_row.addWidget(self.lbl_outline)
         card.v.addLayout(outline_row)
         card.v.addWidget(QLabel("数值越大，文字描边越明显，背景复杂时更清晰（0=关闭）", objectName="hint"))
+
+        # ---- 描边颜色 ----
+        oc_row = QHBoxLayout()
+        oc_row.setSpacing(10)
+        oc_row.addWidget(QLabel("描边颜色", objectName="muted"))
+        self.sw_outline = QLabel()
+        self.sw_outline.setFixedSize(28, 28)
+        oc_row.addWidget(self.sw_outline)
+        b_oc = QPushButton("选择颜色")
+        b_oc.clicked.connect(self._pick_outline_color)
+        oc_row.addWidget(b_oc)
+        b_ocr = QPushButton("跟随主题")
+        b_ocr.setToolTip("按主题自动取反色：浅色主题用白描边，深色/紫色主题用黑描边")
+        b_ocr.clicked.connect(self._reset_outline_color)
+        oc_row.addWidget(b_ocr)
+        oc_row.addStretch(1)
+        card.v.addLayout(oc_row)
 
         line_b = QFrame()
         line_b.setFixedHeight(1)
@@ -2640,6 +2681,24 @@ class MainWindow(QMainWindow):
         self.cb_font.currentTextChanged.connect(lambda _=0: self._apply_font_choice())
         fr.addWidget(self.cb_font)
         card.v.addLayout(fr)
+
+        # ---- 字体大小（整体缩放）----
+        fs_row = QHBoxLayout()
+        fs_row.setSpacing(10)
+        fs_row.addWidget(QLabel("字体大小", objectName="muted"))
+        self.sl_font = QSlider(Qt.Horizontal)
+        self.sl_font.setRange(80, 140)
+        self.sl_font.setSingleStep(5)
+        self.sl_font.setPageStep(10)
+        self.sl_font.setValue(int(round(float(getattr(self, "font_scale", 1.0)) * 100)))
+        self.sl_font.valueChanged.connect(self._on_font_scale_changed)
+        self.sl_font.sliderReleased.connect(self._apply_font_scale)
+        fs_row.addWidget(self.sl_font, 1)
+        self.lbl_font = QLabel("%d%%" % self.sl_font.value(), objectName="muted")
+        self.lbl_font.setFixedWidth(46)
+        fs_row.addWidget(self.lbl_font)
+        card.v.addLayout(fs_row)
+        card.v.addWidget(QLabel("缩放整个界面的字号（80%~140%），松手立即生效", objectName="hint"))
 
         line_c = QFrame()
         line_c.setFixedHeight(1)
@@ -2718,6 +2777,7 @@ class MainWindow(QMainWindow):
 
         v.addWidget(card)
         self._update_bg_label()
+        self._update_color_swatches()      # 描边色块在插值之后创建，这里补刷一次
 
     def _update_bg_label(self):
         if hasattr(self, "lbl_bg"):
@@ -3123,11 +3183,12 @@ class MainWindow(QMainWindow):
         accent = getattr(self, "accent_color", "") or self.setting.get("accent_color", "")
         text_c = getattr(self, "text_color", "") or self.setting.get("text_color", "")
         glass = getattr(self, "glass", 0.0)
-        qss = _make_qss(self.theme, fam, accent, text_c, glass)
+        scale = float(getattr(self, "font_scale", 1.0) or 1.0)
+        qss = _make_qss(self.theme, fam, accent, text_c, glass, scale)
         if scope == "window":
             self.setStyleSheet(qss)
         else:
-            app.setFont(_app_font(fam))
+            app.setFont(_app_font(fam, max(8, int(round(10 * scale)))))
             self.setStyleSheet("")          # 清掉窗口级覆盖，避免压住全局样式
             app.setStyleSheet(qss)
         self._style_log()          # 日志区配色跟主题走（控件级，优先级最高）
@@ -3209,6 +3270,44 @@ class MainWindow(QMainWindow):
             self._refresh_stylesheet()
             self._save_settings()
 
+    def _pick_outline_color(self):
+        """选择文字描边颜色。"""
+        cur = getattr(self, "outline_color", "") or ""
+        def_c = QColor(255, 255, 255) if getattr(self, "theme", "浅色") == "浅色" \
+            else QColor(0, 0, 0)
+        c = QColorDialog.getColor(QColor(cur) if cur else def_c, self,
+                                  _tl("选择描边颜色"))
+        if c.isValid():
+            self.outline_color = c.name()
+            self.setting["outline_color"] = c.name()
+            self._update_color_swatches()
+            self._apply_text_shadow(getattr(self, "text_outline", 0))
+            self._save_settings()
+
+    def _reset_outline_color(self):
+        """描边颜色回到「跟随主题」。"""
+        self.outline_color = ""
+        self.setting["outline_color"] = ""
+        self._update_color_swatches()
+        self._apply_text_shadow(getattr(self, "text_outline", 0))
+        self._save_settings()
+
+    def _on_font_scale_changed(self, val):
+        # 拖动中只更新数字：重刷全量样式表要重排整棵树，逐步做会卡
+        if hasattr(self, "lbl_font"):
+            self.lbl_font.setText("%d%%" % int(val))
+
+    def _apply_font_scale(self):
+        """松手后一次性应用字号缩放。"""
+        try:
+            v = int(self.sl_font.value())
+        except Exception:
+            v = 100
+        self.font_scale = v / 100.0
+        self.setting["font_scale"] = v
+        self._refresh_stylesheet()
+        self._save_settings()
+
     def _reset_colors(self):
         """清空自定义强调色与文字色，恢复主题默认。"""
         self.accent_color = ""
@@ -3224,7 +3323,8 @@ class MainWindow(QMainWindow):
         t = THEMES.get(getattr(self, "theme", "浅色"), THEMES["浅色"])
         accent_def = t.get("accent", "#2563eb")
         text_def = t.get("text_strong", "#1f2937")
-        border = t.get("border2", "#cbd5e1")
+        # 色块边框用中性灰：白描边/白文字色在浅色卡片上也能看清边界
+        border = "rgba(100,116,139,0.55)"
         if hasattr(self, "sw_accent"):
             c = getattr(self, "accent_color", "") or ""
             self.sw_accent.setStyleSheet(
@@ -3233,6 +3333,12 @@ class MainWindow(QMainWindow):
             c = getattr(self, "text_color", "") or ""
             self.sw_text.setStyleSheet(
                 "background:%s;border:2px solid %s;border-radius:8px;" % (c or text_def, border))
+        if hasattr(self, "sw_outline"):
+            c = getattr(self, "outline_color", "") or ""
+            oc = c or ("#ffffff" if getattr(self, "theme", "浅色") == "浅色" else "#000000")
+            self.sw_outline.setStyleSheet(
+                "background:%s;border:2px solid %s;border-radius:8px;" % (oc, border))
+            self.sw_outline.setToolTip("跟随主题" if not c else c)
 
     def _apply_font_choice(self):
         if not hasattr(self, "cb_font"):
