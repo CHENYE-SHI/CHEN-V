@@ -264,6 +264,10 @@ QTableWidget::item {{ padding: 4px 8px; border-bottom: 1px solid {item_border}; 
 QProgressBar {{ background: {bg}; border: none; border-radius: 6px; height: 12px; text-align: center; color: {hint}; font-size: 10px; }}
 QProgressBar::chunk {{ background: {accent2}; border-radius: 6px; }}
 QTextEdit {{ background: {log_bg}; color: {log_fg}; border: none; border-radius: 10px; font-family: '{font}'; font-size: 12px; padding: 8px; }}
+/* 日志区必须用 ID 选择器：后面的 QAbstractScrollArea{{background:transparent}}
+   会把它冲成透明，浅色/紫色主题下就变成白底浅字看不清 */
+QTextEdit#log {{ background: {log_bg}; color: {log_fg}; }}
+QTextEdit#log QWidget {{ background: {log_bg}; }}
 QListWidget {{ background: {card}; border: 1px solid {border}; border-radius: 10px; padding: 4px; }}
 QListWidget::item {{ padding: 6px 8px; border-bottom: 1px solid {item_border}; }}
 QScrollArea {{ border: none; background: transparent; }}
@@ -2075,7 +2079,9 @@ class MainWindow(QMainWindow):
         self.pb_main.setFixedHeight(18)
         card.v.addWidget(self.pb_main)
         self.log = QTextEdit()
+        self.log.setObjectName("log")
         self.log.setReadOnly(True)
+        self._style_log()
         card.v.addWidget(self.log, 1)
         h = QHBoxLayout()
         h.addStretch(1)
@@ -3101,6 +3107,7 @@ class MainWindow(QMainWindow):
             app.setFont(_app_font(fam))
             self.setStyleSheet("")          # 清掉窗口级覆盖，避免压住全局样式
             app.setStyleSheet(qss)
+        self._style_log()          # 日志区配色跟主题走（控件级，优先级最高）
         # 动态刷新硬编码颜色的控件，使其跟随当前主题强调色
         self._refresh_accent_widgets()
         # 下拉弹层是独立 popup，主题刷新后需重新兜底其样式
@@ -4364,6 +4371,36 @@ class MainWindow(QMainWindow):
         return eng
 
     # ------------------------------------------------------------ 消息循环
+    # ------------------------------------------------------------ 日志区配色
+    def _style_log(self):
+        """把日志区配色直接下发给控件自身。
+
+        只靠全局 QSS 不保险：QTextEdit 是 QAbstractScrollArea 子类，模板里
+        后面那条 `QAbstractScrollArea{background:transparent}` 在部分主题/样式
+        下会把日志背景冲成透明，浅色与紫色主题就变成白底浅字看不清。
+        控件级样式表优先级最高，钉死颜色后任何全局规则都压不过。
+        """
+        if not hasattr(self, "log"):
+            return
+        c = THEMES.get(self.theme, THEMES["浅色"])
+        bg, fg, sel = c["log_bg"], c["log_fg"], c["accent2"]
+        sb = c["scrollbar"]
+        self.log.setStyleSheet(
+            "QTextEdit {{ background-color: {bg}; color: {fg}; border: none;"
+            " border-radius: 10px; padding: 8px;"
+            " selection-background-color: {sel}; selection-color: #ffffff; }}"
+            "QTextEdit QWidget {{ background-color: {bg}; color: {fg}; }}"
+            "QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px 0; }}"
+            "QScrollBar::handle:vertical {{ background: {sb}; border-radius: 5px; min-height: 30px; }}"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}"
+            .format(bg=bg, fg=fg, sel=sel, sb=sb))
+        # 双保险：连取色板一起设，避免某些平台样式忽略样式表背景
+        pal = self.log.palette()
+        pal.setColor(self.log.viewport().backgroundRole(), QColor(bg))
+        pal.setColor(self.log.viewport().foregroundRole(), QColor(fg))
+        self.log.viewport().setPalette(pal)
+        self.log.viewport().setAutoFillBackground(True)
+
     # ------------------------------------------------------------ 长阶段提示
     def _on_kernel_status(self, ev):
         """内核心跳回调（工作线程里触发）：首次构建 TensorRT 引擎等长耗时阶段。"""
