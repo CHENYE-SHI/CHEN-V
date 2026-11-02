@@ -317,9 +317,10 @@ class KernelBackend(object):
             self.stop()
             raise RuntimeError("加速内核未就绪：%s" % ev)
 
-    def run_video(self, spec, progress=None, log=None, cancel_event=None):
+    def run_video(self, spec, progress=None, log=None, cancel_event=None, status=None):
         progress = progress or (lambda cur, total, fps: None)
         log = log or (lambda s: None)
+        status = status or (lambda ev: None)
         with self.lock:
             self._start()
             cancel = spec.get("cancel") or ""
@@ -366,6 +367,9 @@ class KernelBackend(object):
                              float(ev.get("fps", 0) or 0))
                 elif kind == "log":
                     log(_clean(ev.get("msg", "")))
+                elif kind == "status":
+                    # 长耗时阶段（如首次构建 TensorRT 引擎）的心跳，交给界面显示
+                    status(ev)
                 elif kind == "done":
                     info.update(ev)
                     info["elapsed"] = time.time() - t0

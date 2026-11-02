@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
 
@@ -200,9 +201,14 @@ class Y4MWriter(object):
 
 
 
+_EMIT_LOCK = threading.Lock()
+
+
 def emit(obj):
-    sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
-    sys.stdout.flush()
+    # 引擎构建期有保活线程并发上报，加锁避免两行 JSON 交错把协议打断
+    with _EMIT_LOCK:
+        sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
+        sys.stdout.flush()
 
 def load_plugins(folder):
     names = ("vmaf.dll", "librife.dll", "lsmashsource.dll", "slv_ncnn_models.dll",
@@ -289,12 +295,91 @@ def _load_vsmlrt():
     return vsmlrt
 
 
+def _engine_path_for(vsmlrt, network, shape, fp16, device_id):
+    """预测 vsmlrt 的引擎缓存文件路径（用来区分「首次构建」还是「命中缓存」）。
+
+    vsmlrt 用「模型内容校验 + 形状 + 精度 + TensorRT 版本 + 显卡名」算 crc32 当文件名，
+    这里按同一套参数复算一次。算不出来就返回 None（仍会照常保活上报）。
+    """
+    try:
+        trt_version = vsmlrt.parse_trt_version(
+            int(CORE.trt.Version()["tensorrt_version"]))
+        try:
+            device_name = CORE.trt.DeviceProperties(int(device_id))["name"].decode()
+            device_name = device_name.replace(" ", "-")
+        except Exception:
+            device_name = "device%d" % int(device_id)
+        return vsmlrt.get_engine_path(
+            network_path=network, min_shapes=shape, opt_shapes=shape, max_shapes=shape,
+            workspace=None, fp16=fp16, use_cublas=False, static_shape=True, tf32=False,
+            use_cudnn=False, input_format=0, output_format=0,
+            builder_optimization_level=3, max_aux_streams=None, short_path=None,
+            bf16=False, engine_folder=ENGINE_DIR,
+            trt_version=trt_version, device_name=device_name)
+    except Exception:
+        return None
+
+
+class _KeepAlive(object):
+    """后台心跳：长时间阻塞时定时告诉界面「还在跑」。
+
+    TensorRT 首次构建引擎要几十秒到几分钟，trtexec 全程不给任何进度，
+    只能靠心跳证明进程没死。每 2 秒推一次 status（界面显示计时），
+    每 10 秒补一条日志（文本日志里也留痕）。
+    """
+
+    def __init__(self, kind, label, hint):
+        self.kind = kind
+        self.label = label
+        self.hint = hint
+        self.t0 = time.time()
+        self._stop = threading.Event()
+        self._th = None
+        self._last_log = 0
+
+    def start(self):
+        def loop():
+            while not self._stop.wait(2.0):
+                el = int(time.time() - self.t0)
+                try:
+                    emit({"ev": "status", "kind": self.kind, "elapsed": el,
+                          "msg": "%s… 已用 %ds%s" % (self.label, el, self.hint)})
+                except Exception:
+                    return
+                if el - self._last_log >= 10:
+                    self._last_log = el
+                    try:
+                        emit({"ev": "log",
+                              "msg": "  %s… 已用 %ds" % (self.label, el)})
+                    except Exception:
+                        return
+
+        self._th = threading.Thread(target=loop, daemon=True)
+        self._th.start()
+
+    def stop(self, msg=""):
+        self._stop.set()
+        if self._th is not None:
+            self._th.join(timeout=1.0)
+            self._th = None
+        try:
+            emit({"ev": "status", "kind": self.kind,
+                  "elapsed": int(time.time() - self.t0),
+                  "done": True, "msg": msg})
+        except Exception:
+            pass
+
+
 def _trt_clip(clip, sr, log):
     """TensorRT 超分。
 
     TensorRT 引擎与 GPU 架构、TensorRT 版本、模型指纹绑定，不能跨机器复用，
     因此引擎缓存在本机 work/engines 下：首次按「模型 + 分块尺寸 + 精度」构建
-    （几分钟），之后同配置直接加载，秒开。
+    （几十秒到几分钟），之后同配置直接加载，秒开。
+
+    首次构建期间 trtexec 拿不到任何进度，所以这里做两件事：
+    1. 先探测引擎缓存是否存在，命中就直接说「秒开」，没命中才提示要等；
+    2. 构建中启用心跳，向界面推送「已用 Ns」，避免看起来像卡死。
     """
     if not hasattr(CORE, "trt"):
         raise RuntimeError("vstrt 插件未加载（缺少 vstrt.dll 或 TensorRT 运行库）")
@@ -306,22 +391,54 @@ def _trt_clip(clip, sr, log):
         tile = 0
     shape = (tile, tile) if tile else (w, h)
     fp16 = bool(int(sr.get("fp16", 0)))
+    gpu = int(sr.get("gpu", 0))
     os.makedirs(ENGINE_DIR, exist_ok=True)
+    network = ascii_safe_path(sr["param"])
     log("TensorRT：%s（%s，%d×%d 分块）" % (
         os.path.basename(str(sr.get("param", ""))),
         "fp16" if fp16 else "fp32", shape[0], shape[1]))
+
+    engine_file = _engine_path_for(vsmlrt, network, shape, fp16, gpu)
+    cached = bool(engine_file and os.path.isfile(engine_file)
+                  and os.path.getsize(engine_file) >= 1024)
+    keep = None
+    if cached:
+        log("TensorRT：命中引擎缓存，直接加载（秒开）")
+    else:
+        log("TensorRT：本机首次使用此「模型 + 分辨率」，需要现构建引擎")
+        log("          预计 30~90 秒（显卡越弱越久），这段时间没有帧进度是正常的")
+        log("          构建完成后缓存在 work/engines，下次同配置直接秒开")
+        keep = _KeepAlive("engine_build", "正在构建 TensorRT 引擎",
+                          "（首次构建，请勿关闭）")
+        keep.start()
+
     t0 = time.time()
-    engine = vsmlrt.trtexec(
-        ascii_safe_path(sr["param"]), channels=3,
-        opt_shapes=shape, max_shapes=shape, min_shapes=shape,
-        fp16=fp16, device_id=int(sr.get("gpu", 0)),
-        static_shape=True, input_format=0, output_format=0,
-        engine_folder=ENGINE_DIR, log=False,
-    )
-    log("TensorRT：引擎就绪，用时 %.1fs（缓存于 work/engines）" % (time.time() - t0))
+    try:
+        engine = vsmlrt.trtexec(
+            network, channels=3,
+            opt_shapes=shape, max_shapes=shape, min_shapes=shape,
+            fp16=fp16, device_id=gpu,
+            static_shape=True, input_format=0, output_format=0,
+            engine_folder=ENGINE_DIR, log=False,
+        )
+    except BaseException:
+        if keep is not None:
+            keep.stop("引擎构建失败")
+        raise
+    cost = time.time() - t0
+    if keep is None:
+        log("TensorRT：引擎就绪，用时 %.1fs（缓存于 work/engines）" % cost)
+    else:
+        keep.stop("引擎构建完成")
+        try:
+            mb = os.path.getsize(engine) // (1024 * 1024)
+        except Exception:
+            mb = 0
+        log("TensorRT：引擎构建完成，用时 %.1fs，%d MB（已缓存，下次同配置秒开）"
+            % (cost, mb))
     # 实测（1080p / CUGAN 2x / RTX 5060 Laptop）：分块 160 + 2 流 + CUDA Graph 最快，
     # 约 0.19s/帧（ncnn 同参数 0.55s/帧）；分块 256/320 反而更慢（块少但单块更大，占用上升）。
-    kw = dict(device_id=int(sr.get("gpu", 0)), num_streams=2, verbosity=2)
+    kw = dict(device_id=gpu, num_streams=2, verbosity=2)
     if tile:
         kw["tilesize"] = tile
     try:

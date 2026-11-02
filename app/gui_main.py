@@ -2051,6 +2051,11 @@ class MainWindow(QMainWindow):
         card = Card()
         self.lbl_cur = QLabel("尚无任务", objectName="h2")
         card.v.addWidget(self.lbl_cur)
+        # 长耗时阶段（首次构建 TensorRT 引擎等）单独一行提示，不挤占日志
+        self.lbl_stage = QLabel("")
+        self.lbl_stage.setObjectName("muted")
+        self.lbl_stage.hide()
+        card.v.addWidget(self.lbl_stage)
         self.pb_main = QProgressBar()
         self.pb_main.setRange(0, 100)
         self.pb_main.setValue(0)
@@ -3935,7 +3940,10 @@ class MainWindow(QMainWindow):
 
     def _stop_queue(self):
         self.stop_event.set()
-        self.lbl_cur.setText("正在停止…")
+        if self.pb_main.minimum() == self.pb_main.maximum():
+            self._stage_busy(True, "")      # 忙态：由阶段行统一说明在等什么
+        else:
+            self.lbl_cur.setText("正在停止…")
 
     def _run_queue(self):
         try:
@@ -4171,6 +4179,7 @@ class MainWindow(QMainWindow):
                 spec,
                 progress=on_prog,
                 log=lambda s: self.msg.put(("log", s)),
+                status=self._on_kernel_status,
                 cancel_event=self.stop_event)
         except kernel_backend.Cancelled:
             raise jobmod.Cancelled()
@@ -4359,6 +4368,32 @@ class MainWindow(QMainWindow):
         return eng
 
     # ------------------------------------------------------------ 消息循环
+    # ------------------------------------------------------------ 长阶段提示
+    def _on_kernel_status(self, ev):
+        """内核心跳回调（工作线程里触发）：首次构建 TensorRT 引擎等长耗时阶段。"""
+        self.msg.put(("kstatus", ev.get("msg") or "", bool(ev.get("done"))))
+
+    def _stage_busy(self, on, text=""):
+        """切换「不确定进度」：进度条转跑马灯 + 单独一行说明在等什么。
+
+        用于首次构建 TensorRT 引擎这类无法给出百分比的阶段，避免看起来像卡死。
+        """
+        busy = self.pb_main.minimum() == self.pb_main.maximum()
+        if on:
+            if not busy:
+                self.pb_main.setRange(0, 0)      # 0/0 即 Qt 的不确定进度动画
+            if self.stop_event.is_set():
+                # 引擎构建是原子步骤，中途停不下来，得如实说明
+                text = "正在停止…（等当前步骤结束，引擎构建不能中途中断）"
+            if text:
+                self.lbl_stage.setText(text)
+            self.lbl_stage.show()
+        else:
+            if busy:
+                self.pb_main.setRange(0, 100)
+            self.lbl_stage.hide()
+            self.lbl_stage.setText("")
+
     def _poll(self):
         try:
             while True:
@@ -4372,7 +4407,14 @@ class MainWindow(QMainWindow):
                     idx, name, total = m[1], m[2], m[3]
                     self.cur_item = idx
                     self.lbl_cur.setText("第 %d/%d 个：%s" % (idx + 1, len(self.items), name))
+                    self._stage_busy(False)
                     self.pb_main.setValue(0)
+                elif kind == "kstatus":
+                    text, done = m[1], m[2]
+                    if done:
+                        self._stage_busy(False)
+                    else:
+                        self._stage_busy(True, text)
                 elif kind == "item":
                     idx, status = m[1], m[2]
                     if 0 <= idx < len(self.items):
@@ -4383,6 +4425,8 @@ class MainWindow(QMainWindow):
                             cell.setForeground(self._status_color(status))
                 elif kind == "prog":
                     idx, d, t = m[1], m[2], m[3]
+                    if self.pb_main.minimum() == self.pb_main.maximum():
+                        self._stage_busy(False)     # 开始出帧了，退出不确定态
                     pct = int(100.0 * d / t) if t else 0
                     if 0 <= idx < len(self.items):
                         self.items[idx]["progress"] = pct
@@ -4393,6 +4437,7 @@ class MainWindow(QMainWindow):
                         self.pb_main.setValue(pct)
                 elif kind == "done":
                     self.running = False
+                    self._stage_busy(False)
                     self.btn_start.setEnabled(True)
                     self.btn_stop.setEnabled(False)
                     for b in self.mode_buttons.values():
