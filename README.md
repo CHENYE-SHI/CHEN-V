@@ -76,7 +76,7 @@ python main.py
 
 ## 致谢
 
-感谢以下开源项目（详见程序「关于 → 特别鸣谢」）：
+感谢以下开源项目，本项目的超分与补帧能力建立在这些工作之上（模型与算法版权归各原作者所有）：
 
 - [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)（Xintao Wang 等）
 - [Real-CUGAN](https://github.com/bilibili/ailab)（bilibili 人工智能实验室）
