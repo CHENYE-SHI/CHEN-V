@@ -23,7 +23,7 @@ using System.Windows.Forms;
 class SetupApp : Form
 {
     public const string APP_NAME = "CHEN-V";
-    public const string APP_VER = "1.01";
+    public const string APP_VER = "1.02";
     public const string APP_PUBLISHER = "辰师";
     public const string APP_URL = "https://github.com/CHENYE-SHI/CHEN-V";
     public const string SKIP_DIR = "installer_py/";

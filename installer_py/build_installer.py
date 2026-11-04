@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CHEN-V 打包步骤 1：把程序文件同步到 dist/CHEN-V_Setup_v1.01/。
+"""CHEN-V 打包步骤 1：把程序文件同步到 dist/CHEN-V_Setup_v1.02/。
 
 设计要点（踩过的坑）：
   * 不再「先删整个目录再复制」——批量删除会被安全策略拦下，脚本继续往下跑，
@@ -19,7 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VER = "1.01"
+VER = "1.02"
 OUT = os.path.join(ROOT, "dist", "CHEN-V_Setup_v%s" % VER)
 
 ROOT_FILES = ["CHEN-V.exe", "命令行.bat", "README.md", "LICENSE", "announce.json"]
@@ -32,9 +32,13 @@ VERIFY_EXTS = (".py", ".json", ".bat", ".md", ".nsi", ".csproj", ".manifest", ".
 STALE_LIMIT = 30      # 多余文件逐个删除的上限，超过只告警不删
 
 # 可选组件（torch 4.2GB / numpy / pip 等）不进安装包：用户跑
-# 「安装GMFSS组件.bat」时再下载。site-packages 里只保留这些原有目录。
+# 「安装GMFSS组件.bat」时再下载，或者单独装 GMFSS 补充包。
+# site-packages 里只保留这些原有目录。
 SITE_PACKAGES_KEEP = {"vapoursynth"}
-SKIP_DIRS_REL = {"vrt/python/Scripts"}
+
+# GMFSS 的模型权重（72MB）也挪到补充包里：不用 GMFSS 的人没必要为它多下 72MB，
+# 主包装完 RIFE 即可用，补包装完才会出现 GMFSS 选项。
+SKIP_DIRS_REL = {"vrt/python/Scripts", "vrt/plugins/gmfss"}
 
 
 def log(msg=""):

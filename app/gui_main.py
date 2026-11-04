@@ -148,8 +148,8 @@ def _i18n_label(text, key, object_name="hint", wrap=True):
 
 
 APP_NAME = "CHEN-V"
-APP_VERSION = "V1.01"
-BUILD = "2026.10.31"
+APP_VERSION = "V1.02"
+BUILD = "2026.11.03"
 SETTINGS_FILE = os.path.join(paths.APP_DIR, "settings_qt.json")
 PRESETS_DIR = os.path.join(paths.APP_DIR, "presets")
 
@@ -241,12 +241,16 @@ QPushButton#mode:hover {{ color: {accent}; border: 1px solid {accent}; }}
 QFrame#sep {{ background: {border2}; border: none; }}
 QPushButton#mode:checked {{ background: {card}; color: {accent_checked_fg}; font-weight: 600; border: 1px solid {accent_checked}; }}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ background: {card_rgba}; border: 1px solid {border2}; border-radius: 8px; padding: 6px 10px; min-height: 22px; }}
+/* 数值框内部还有一层 QLineEdit，两层半透明叠起来会变成不透明白块，
+   单独把内层设为透明，只留外壳那一层，才能和其他输入框一致地透出背景 */
+QSpinBox QLineEdit, QDoubleSpinBox QLineEdit {{ background: transparent; border: none; padding: 0; }}
+QSpinBox:disabled QLineEdit, QDoubleSpinBox:disabled QLineEdit {{ background: transparent; border: none; padding: 0; }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid {focus_border}; outline: none; }}
 QComboBox:focus {{ border: 1px solid {focus_border}; outline: none; }}
 QComboBox::drop-down {{ border: none; background: transparent; width: 24px; }}
 QComboBox::down-arrow {{ image: none; border: none; }}
 QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QLineEdit:disabled {{
-    color: {disabled_fg}; background: {disabled_bg}; border-color: {border};
+    color: {disabled_fg}; background: {disabled_bg_rgba}; border-color: {border};
 }}
 QRadioButton:disabled, QCheckBox:disabled {{ color: {disabled_fg}; }}
 QComboBox QAbstractItemView {{ background: {card}; color: {fg}; border: 1px solid {border2}; border-radius: 8px; padding: 4px; outline: none; }}
@@ -402,6 +406,16 @@ def _make_qss(theme="浅色", font="Microsoft YaHei UI",
     colors["drop_rgba"] = _rgba_css(*ga["drop"])
     colors["seg_rgba"] = _rgba_css(*ga["seg"])
     colors["status_rgba"] = _rgba_css(*ga["statusbar"])
+    # 禁用态背景：也走半透明，不透明度比 card 高一档（锁定控件压暗但仍透出背景图）。
+    # 深色主题在 card 基础上加深色值；浅色/紫色主题则调暗。这里直接沿用 card 的
+    # 颜色与不透明度，再往上加一点，视觉上「深一点但依然透」。
+    _card_rgb, _card_a = ga["card"]
+    _dis_a = max(36, min(100, _card_a + 8))
+    if is_dark:
+        _dis_rgb = tuple(max(0, c - 22) for c in _card_rgb)
+    else:
+        _dis_rgb = tuple(max(0, c - 30) for c in _card_rgb)
+    colors["disabled_bg_rgba"] = _rgba_css(_dis_rgb, _dis_a)
     # 供自绘容器（卡片/侧栏/拖放区/分段/状态栏）读取当前生效的颜色
     _PAINT["colors"] = dict(colors)
     _PAINT["glass"] = ga
@@ -600,6 +614,8 @@ class Backdrop(QWidget):
         self._base = QColor(21, 23, 31)   # 无图时的兜底底色
         self._mask = QColor(8, 10, 16)    # 蒙版颜色（深色主题暗化/浅色主题提亮）
         self._player = None               # QMediaPlayer
+        self._audio = None                # QAudioOutput（Qt6 必须挂上才出声）
+        self._volume = 50                 # 壁纸音量 0~100
         self._video_item = None           # QGraphicsVideoItem
         self._scene = None                # QGraphicsScene
         self._view = None                 # QGraphicsView（视频容器，垫底）
@@ -609,7 +625,7 @@ class Backdrop(QWidget):
         if self._player is not None:
             return
         try:
-            from PySide6.QtMultimedia import QMediaPlayer
+            from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
             from PySide6.QtMultimediaWidgets import QGraphicsVideoItem
             from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
             from PySide6.QtWidgets import QGraphicsRectItem
@@ -631,6 +647,10 @@ class Backdrop(QWidget):
             self._view.setStyleSheet("background: transparent;")
             self._view.hide()
             self._player = QMediaPlayer(self)
+            # Qt6 里不挂 QAudioOutput 就等于静音，壁纸自带的音轨不会出声
+            self._audio = QAudioOutput(self)
+            self._audio.setVolume(max(0.0, min(1.0, self._volume / 100.0)))
+            self._player.setAudioOutput(self._audio)
             self._player.setVideoOutput(self._video_item)
             self._player.setLoops(QMediaPlayer.Loops.Infinite)
             self._player.errorOccurred.connect(self._on_video_error)
@@ -745,6 +765,15 @@ class Backdrop(QWidget):
         else:
             self.pix = None
         self.update()
+
+    def set_volume(self, v):
+        """设置壁纸音量（0~100）。0 等于静音，不影响系统音量。"""
+        try:
+            self._volume = max(0, min(100, int(v)))
+        except Exception:
+            return
+        if self._audio is not None:
+            self._audio.setVolume(self._volume / 100.0)
 
     def set_dark(self, val):
         self.dark = max(0.0, min(1.0, float(val)))
@@ -899,22 +928,72 @@ class FlowLayout(QLayout):
         m = self.contentsMargins()
         return size + QSize(m.left() + m.right(), m.top() + m.bottom())
 
+    def _plan(self, hints, avail):
+        """把控件分到各行的方案：先算最少需要几行，再平均分配。
+
+        纯贪心会排成 3+3+2：前几个长控件占满一行，剩下的短控件挤在末尾，
+        最后一行只剩两项、右边一大片空白。先按「最少行数」定下目标，
+        再让每行数量接近 count/行数，各行密度才一致。
+        """
+        n = len(hints)
+        if n == 0:
+            return []
+
+        # 贪心算「最少需要几行」——只用来定行数，不用来定位
+        n_lines, acc = 1, 0
+        for hint in hints:
+            w = hint.width()
+            need = w if acc == 0 else acc + self._h + w
+            if acc > 0 and need > avail:
+                n_lines += 1
+                acc = w
+            else:
+                acc = need
+        if n_lines <= 1:
+            return [list(range(n))]
+
+        per = -(-n // n_lines)          # 每行目标数量（向上取整）
+        lines, i = [], 0
+        while i < n:
+            end = min(i + per, n)
+            # 目标数量放不下就收缩，避免把控件挤出右边界
+            while end > i + 1:
+                wsum = sum(hints[j].width() for j in range(i, end))
+                if wsum + (end - i - 1) * self._h <= avail:
+                    break
+                end -= 1
+            lines.append(list(range(i, end)))
+            i = end
+        return lines
+
     def _do_layout(self, rect, test_only):
+        """两遍布局：先切行，再按行高垂直居中。
+
+        行内原来按 y 顶部对齐，复选框和「帧流法 + 数值框」这种组合项高度不同，
+        一行下来底部参差不齐。这里先拿到每行最大高度，再把矮的控件居中。
+        """
         m = self.contentsMargins()
         eff = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
-        x, y, line_h = eff.x(), eff.y(), 0
-        for item in self._items:
-            hint = item.sizeHint()
-            w, h = hint.width(), hint.height()
-            if x + w > eff.right() + 1 and line_h > 0:
-                x = eff.x()
-                y += line_h + self._v
-                line_h = 0
-            if not test_only:
-                item.setGeometry(QRect(QPoint(x, y), QSize(w, h)))
-            x += w + self._h
-            line_h = max(line_h, h)
-        return y + line_h - rect.y() + m.bottom()
+        if not self._items:
+            return 0
+
+        hints = [it.sizeHint() for it in self._items]
+        lines = self._plan(hints, eff.width())
+
+        y = eff.y()
+        for line in lines:
+            row_h = max(hints[i].height() for i in line)
+            x = eff.x()
+            for i in line:
+                hint = hints[i]
+                if not test_only:
+                    oy = y + (row_h - hint.height()) // 2
+                    self._items[i].setGeometry(
+                        QRect(QPoint(x, oy), QSize(hint.width(), hint.height())))
+                x += hint.width() + self._h
+            y += row_h + self._v
+
+        return (y - self._v - rect.y() + m.bottom()) if lines else 0
 
 
 class Card(GlassPanel):
@@ -1151,6 +1230,8 @@ class MainWindow(QMainWindow):
             d["glass"] = getattr(self, "glass", 0.0)
             # 拖动时是否暂停动态壁纸（默认关闭，壁纸连续播放）
             d["pause_bg_on_drag"] = self.setting.get("pause_bg_on_drag", 0)
+            # 壁纸音量（0~100）：不写进快照就会每次启动回到默认值
+            d["bg_volume"] = int(self.setting.get("bg_volume", 50))
             # 界面强调色 + 文字颜色 + 字体描边强度
             d["accent_color"] = self.setting.get("accent_color", "")
             d["text_color"] = self.setting.get("text_color", "")
@@ -1206,6 +1287,22 @@ class MainWindow(QMainWindow):
         self.setting["pause_bg_on_drag"] = 1 if on else 0
         self._save_settings()
 
+    def _on_bg_volume(self, v):
+        """拖动壁纸音量滑块：立即生效，停手后再写盘，避免频繁落盘。"""
+        if hasattr(self, "bg"):
+            self.bg.set_volume(v)
+        self.setting["bg_volume"] = int(v)
+        if hasattr(self, "lbl_bgvol"):
+            self.lbl_bgvol.setText("%d%%" % int(v))
+        timer = getattr(self, "_bgvol_timer", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.setInterval(600)
+            timer.timeout.connect(self._save_settings)
+            self._bgvol_timer = timer
+        timer.start()
+
     def _pick_wallpaper(self):
         """选择壁纸目录，扫描目录内的图片/视频文件作为背景。"""
         try:
@@ -1237,6 +1334,15 @@ class MainWindow(QMainWindow):
         self.setting["wallpaper_dir"] = directory
         self._save_settings()
 
+        nvid = sum(1 for w in items if w["type"] == "video")
+        tip = _tl("共 %d 个壁纸（%d 个视频、%d 个图片）\n目录：%s") % (len(items), nvid, len(items) - nvid, directory)
+        self._show_wallpaper_dialog(items, tip)
+
+    def _show_wallpaper_dialog(self, items, tip_text):
+        """通用壁纸选择对话框（本地目录壁纸 / Wallpaper Engine 壁纸共用）。
+
+        items: [{title, type("video"|"image"), file, preview, ...}]
+        """
         dlg = QDialog(self)
         dlg.setWindowTitle(_tl("选择壁纸"))
         dlg.resize(760, 580)
@@ -1244,20 +1350,15 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(10)
 
-        nvid = sum(1 for w in items if w["type"] == "video")
-        tip = QLabel(_tl("共 %d 个壁纸（%d 个视频、%d 个图片）\n目录：%s")
-                     % (len(items), nvid, len(items) - nvid, directory),
-                     objectName="muted")
+        tip = QLabel(tip_text, objectName="muted")
         tip.setWordWrap(True)
         lay.addWidget(tip)
-        # 搜索框
         search = QLineEdit()
         search.setPlaceholderText(_tl("搜索壁纸文件名…"))
         lay.addWidget(search)
         lst = QListWidget()
         lst.setIconSize(QSize(96, 54))
         lay.addWidget(lst, 1)
-        # 预览
         prev = QLabel(_tl("选择左侧壁纸查看预览"), objectName="muted")
         prev.setMinimumHeight(160)
         prev.setAlignment(Qt.AlignCenter)
@@ -1272,7 +1373,7 @@ class MainWindow(QMainWindow):
                 tag = _tl("[视频]") if w["type"] == "video" else _tl("[图片]")
                 it = QListWidgetItem("%s %s" % (tag, w["title"]))
                 it.setData(Qt.UserRole, w)
-                p = w["file"]
+                p = w.get("preview") or w["file"]
                 if p and os.path.isfile(p):
                     it.setIcon(QIcon(p))
                 lst.addItem(it)
@@ -1284,7 +1385,7 @@ class MainWindow(QMainWindow):
             if not it:
                 return
             w = it.data(Qt.UserRole)
-            p = w["file"]
+            p = w.get("preview") or w["file"]
             if p and os.path.isfile(p):
                 pm = QPixmap(p)
                 if not pm.isNull():
@@ -1309,8 +1410,7 @@ class MainWindow(QMainWindow):
                 return
             w = it.data(Qt.UserRole)
             if w["file"] and os.path.isfile(w["file"]):
-                self._apply_bg(w["file"], save=True,
-                               is_video=(w["type"] == "video"))
+                self._apply_bg(w["file"], save=True, is_video=(w["type"] == "video"))
             else:
                 QMessageBox.warning(self, _tl("壁纸"), _tl("这个壁纸文件不存在。"))
                 return
@@ -1442,6 +1542,11 @@ class MainWindow(QMainWindow):
             self._apply_bg(_bgv, save=False, is_video=True)
         elif _bg:
             self._apply_bg(_bg, save=False)
+        # 恢复壁纸音量（set_volume 在播放器还没建时只记数值，建好后自动套用）
+        try:
+            self.bg.set_volume(int(self.setting.get("bg_volume", 50)))
+        except Exception:
+            pass
         # 视频 widget 挂到 root 并压到 sidebar 之下（GPU 硬解，不抓帧不降帧率）
         self.bg._attach_video_widget(root, self._sidebar)
         # 恢复蒙版暗度 + 按主题适配蒙版颜色
@@ -1955,7 +2060,18 @@ class MainWindow(QMainWindow):
         right.setFixedWidth(360)
         root.addWidget(left_scroll, 1)
         root.addWidget(right, 0)
-        return page
+
+        # 窗口拉窄后内容会超出可用宽度：包一层滚动区，让横向滚动条按需出现。
+        # 不包的话布局只会把控件压到最小、再把右边整块裁掉，用户既看不全也拖不到。
+        # setWidgetResizable(True) 让它跟随窗口放大；缩到比最小宽度还小时，
+        # page 保持最小宽度、滚动条出现，参数区不会被挤成一条缝。
+        outer = QScrollArea()
+        outer.setWidgetResizable(True)
+        outer.setFrameShape(QFrame.NoFrame)
+        outer.setWidget(page)
+        outer.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        outer.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        return outer
 
 
     def _build_quick_settings(self):
@@ -2177,13 +2293,24 @@ class MainWindow(QMainWindow):
             _cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             _cb.setMinimumContentsLength(10)
             _cb.setMinimumWidth(145)
-        # 复选框用流式布局：按左栏实际宽度自动换行（中文 2 列、英文 1~2 列），
-        # 不会像固定 3/2 列那样把卡片最小宽度撑到超出视口、逼出横向滚动条。
-        chk = FlowLayout(h_spacing=22, v_spacing=6)
-        for w in (self.chk_two, self.chk_workres, self.chk_trt,
-                  self.chk_keep, self.dedup_wrap, self.chk_scene,
-                  self.chk_hw, self.chk_turbo):
-            chk.addWidget(w)
+        # 复选框用固定 3 列网格。流式布局虽然能自适应换行，但每行控件宽度
+        # 各不相同，上下两行的列边缘永远对不齐，看着就是散的。
+        # 网格能保证同一列严格对齐：宽度不够时由外层 QScrollArea 出横向滚动条，
+        # 而不是压扁控件或把右边裁掉。
+        chk = QGridLayout()
+        chk.setContentsMargins(0, 2, 0, 0)
+        chk.setHorizontalSpacing(16)
+        chk.setVerticalSpacing(8)
+        _chk_items = (self.chk_two, self.chk_workres, self.chk_trt,
+                      self.chk_keep, self.dedup_wrap, self.chk_scene,
+                      self.chk_hw, self.chk_turbo)
+        for _i, _w in enumerate(_chk_items):
+            chk.addWidget(_w, _i // 3, _i % 3)
+        # 列宽：前两列按最宽项定，多余空间全部给第三列，
+        # 否则 QGridLayout 会把空余均分到各列之间，中间空出一大片。
+        chk.setColumnStretch(0, 0)
+        chk.setColumnStretch(1, 0)
+        chk.setColumnStretch(2, 1)
         g.addWidget(self.lbl_sr_desc, r, 0, 1, 4)
         r += 1
         g.addWidget(self.lbl_vfi_desc, r, 0, 1, 4)
@@ -2865,6 +2992,27 @@ class MainWindow(QMainWindow):
             "关闭后：壁纸全程连续播放（默认）。")
         self.chk_pause_bg.toggled.connect(self._on_pause_bg_toggled)
         card.v.addWidget(self.chk_pause_bg)
+
+        # 壁纸音量：视频壁纸自带音轨时才听得到，0 = 静音
+        vol_row = QHBoxLayout()
+        vol_row.setSpacing(10)
+        _vl = QLabel("壁纸音量", objectName="muted")
+        _vl.setMinimumWidth(64)
+        vol_row.addWidget(_vl)
+        self.sl_bgvol = QSlider(Qt.Horizontal)
+        self.sl_bgvol.setRange(0, 100)
+        self.sl_bgvol.setValue(int(self.setting.get("bg_volume", 50)))
+        self.sl_bgvol.setMaximumWidth(300)
+        self.sl_bgvol.setToolTip(
+            "视频壁纸自带音轨时才会出声，0 = 静音。\n"
+            "只影响程序内的壁纸声，不改系统音量；无音轨的壁纸调了也没声。")
+        self.lbl_bgvol = QLabel("%d%%" % self.sl_bgvol.value(), objectName="muted")
+        self.lbl_bgvol.setMinimumWidth(46)
+        self.sl_bgvol.valueChanged.connect(self._on_bg_volume)
+        vol_row.addWidget(self.sl_bgvol)
+        vol_row.addWidget(self.lbl_bgvol)
+        vol_row.addStretch(1)
+        card.v.addLayout(vol_row)
 
         line_d = QFrame()
         line_d.setFixedHeight(1)

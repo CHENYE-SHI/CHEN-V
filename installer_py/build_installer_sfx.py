@@ -22,7 +22,7 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VER = "1.01"
+VER = "1.02"
 
 SRC = os.path.join(ROOT, "dist", "CHEN-V_Setup_v%s" % VER)
 BOOT = os.path.join(HERE, "bootstrapper", "bin", "Release", "net48", "CHEN-V_Setup.exe")
@@ -33,7 +33,7 @@ COMPRESS_LEVEL = 1          # 1=最快（磁盘是瓶颈，压缩率收益有限
 
 
 def build_zip():
-    """把分发目录打成 ZIP，条目路径以 CHEN-V_Setup_v1.01/ 开头。"""
+    """把分发目录打成 ZIP，条目路径以 CHEN-V_Setup_v1.02/ 开头。"""
     total = 0
     for root, _dirs, files in os.walk(SRC):
         for f in files:

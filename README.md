@@ -23,16 +23,19 @@ CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本�
 
 ## 下载与安装
 
-从 [Releases](https://github.com/CHENYE-SHI/CHEN-V/releases) 页面下载最新版压缩包，解压后运行 `CHEN-V.exe` 即可，无需安装。
+从 [Releases](https://github.com/CHENYE-SHI/CHEN-V/releases) 页面下载 `CHEN-V_Setup_v1.02.exe`，双击安装即可。安装器把文件直接释放到你选的目录，不经过系统临时目录，也不额外占用 C 盘。
 
 > 首次运行时若使用 TensorRT，需要为本机 GPU 构建引擎（每个模型 + 分辨率组合一次，约几分钟），后续即时加载。
 
-### 可选组件：GMFSS Fortuna Union
+### 补充包：GMFSS Fortuna Union
 
-GMFSS 走 PyTorch 推理，模型权重已内置，但 PyTorch 运行时约 2.8GB，单独按需安装：
+GMFSS 走 PyTorch 推理，光运行时就有 4.2 GB，所以没跟主包放在一起。需要的话单独下载 `CHEN-V_GMFSS_Setup_v1.02.exe`（约 2.7 GB）：
 
-1. 双击程序目录里的 **`安装GMFSS组件.bat`**（会下载 torch CUDA 12.8 + numpy，10~40 分钟）
-2. 装完后重启 CHEN-V，「补帧模型」下拉框里出现 **GMFSS Fortuna Union（光流·动漫）**
+1. 先装好 CHEN-V 主程序，再双击补充包，点「选择目录」选中你装 CHEN-V 的那个文件夹
+2. 安装器会校验目录里有没有 `CHEN-V.exe` 和 `app\gui_main.py`，选错直接拦下；装完重启 CHEN-V，「补帧模型」下拉框里就会出现 **GMFSS Fortuna Union**
+
+补充包只往已有目录里合并文件，不写注册表、不建快捷方式、不动你的设置。
+程序目录里的 `安装GMFSS组件.bat` 是联网重装用的备用手段，补充包装好之后一般用不到。
 
 速度参考（RTX 5060 Laptop，1080p fp16）：每帧约 1.0 秒，显存约 2.8GB。
 要求 NVIDIA 显卡 + 驱动支持 CUDA 12.8（50 系需要）；不装该组件不影响 RIFE 补帧。
