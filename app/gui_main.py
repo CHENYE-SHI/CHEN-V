@@ -1848,7 +1848,7 @@ class MainWindow(QMainWindow):
         left_scroll.setWidget(left_panel)
         lv = QVBoxLayout(left_panel)
         lv.setContentsMargins(2, 2, 2, 2)
-        lv.setSpacing(12)
+        lv.setSpacing(10)
 
         # 标题行：左侧标题 + 右侧紧凑的预设控件
         title_row = QHBoxLayout()
@@ -2079,7 +2079,7 @@ class MainWindow(QMainWindow):
         card.v.addWidget(QLabel("处理设置", objectName="h2"))
         g = QGridLayout()
         g.setHorizontalSpacing(12)
-        g.setVerticalSpacing(10)
+        g.setVerticalSpacing(9)
 
         self.cb_sr = QComboBox()
         _fill_combo(self.cb_sr, list(self.sr_map) or ["（没有找到超分模型）"])
@@ -4083,20 +4083,27 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "lbl_vfi_desc"):
             return
         name = _cb_val(self.cb_vfi)
-        desc = _tl(self.rife_desc.get(name, ""))
+        raw = self.rife_desc.get(name, "")
+        desc = _tl(raw)
         # GMFSS 显存占用远高于 RIFE：4K 上单帧激活值约 11GB，8GB 卡跑不了。
-        # 内核会按显存预算自动降级（跳过 AI 超分、改用 Lanczos 放大），
-        # 提前在这里讲清楚，免得用户以为是画质变差或程序出错。
+        # 内核会按显存预算自动降级（跳过 AI 超分、改用 Lanczos 放大）。
+        # 这段提示不再拼进说明正文：多出来的一行会把左栏内容顶高，
+        # 窗口高度正好卡在临界值时会凭空冒出一条滚动条，看着像界面出了毛病。
+        # 改成放进下拉框的悬停提示，信息不丢，布局也不再随选中的模型变化。
+        tip = ""
         if self.rife_map.get(name, {}).get("engine") == "gmfss" \
                 and getattr(self, "mode", "") != MODE_VFI:
-            desc = (desc + "\n" + _tl(
-                "提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、"
-                "改用 Lanczos 放大；要 4K + AI 超分请改用 RIFE。"))
+            tip = _tl("提示：GMFSS 显存占用高。输出 4K 时会自动跳过 AI 超分、"
+                      "改用 Lanczos 放大；要 4K + AI 超分请改用 RIFE。")
         self.lbl_vfi_desc.setText(desc)
         # 下拉框宽度有限，长名字会被省略号截掉；悬停时给出完整名称与用途
-        raw = self.rife_desc.get(name, "")
         shown = self.cb_vfi.currentText() or name
-        self.cb_vfi.setToolTip(("%s\n%s" % (shown, _tl(raw))) if raw else shown)
+        parts = [shown]
+        if desc:
+            parts.append(desc)
+        if tip:
+            parts.append(tip)
+        self.cb_vfi.setToolTip("\n".join(parts))
 
     def _sync_sr_desc(self):
         """根据当前选中的超分模型，更新用途说明文字。"""
