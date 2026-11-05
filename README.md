@@ -4,10 +4,6 @@
 
 CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本地视频画质增强工具，支持视频 / 图片 / 批量队列 / 图片序列输出，内置 ncnn（Vulkan）与 TensorRT 加速内核。
 
-<p align="center">
-  <img src="app/icon.png" width="128" alt="CHEN-V logo">
-</p>
-
 ## 功能特性
 
 - **补帧**：RIFE ncnn，把低帧率视频补到 60/120fps；可选 **GMFSS Fortuna Union**（光流补帧，动漫/线条画质更好，速度较慢）
@@ -27,6 +23,8 @@ CHEN-V 是一款基于 RIFE ncnn 补帧 + Real-CUGAN / Real-ESRGAN 超分的本�
 
 > 首次运行时若使用 TensorRT，需要为本机 GPU 构建引擎（每个模型 + 分辨率组合一次，约几分钟），后续即时加载。
 
+备用下载渠道见 [个人仓库页](https://chen-74900.app.workbuddy.host)，提供夸克网盘与百度网盘。
+
 ### 补充包：GMFSS Fortuna Union
 
 GMFSS 走 PyTorch 推理，光运行时就有 4.2 GB，所以没跟主包放在一起。需要的话单独下载 `CHEN-V_GMFSS_Setup_v1.02.exe`（约 2.7 GB）：
@@ -35,7 +33,6 @@ GMFSS 走 PyTorch 推理，光运行时就有 4.2 GB，所以没跟主包放在�
 2. 安装器会校验目录里有没有 `CHEN-V.exe` 和 `app\gui_main.py`，选错直接拦下；装完重启 CHEN-V，「补帧模型」下拉框里就会出现 **GMFSS Fortuna Union**
 
 补充包只往已有目录里合并文件，不写注册表、不建快捷方式、不动你的设置。
-程序目录里的 `安装GMFSS组件.bat` 是联网重装用的备用手段，补充包装好之后一般用不到。
 
 速度参考（RTX 5060 Laptop，1080p fp16）：每帧约 1.0 秒，显存约 2.8GB。
 要求 NVIDIA 显卡 + 驱动支持 CUDA 12.8（50 系需要）；不装该组件不影响 RIFE 补帧。
@@ -46,22 +43,17 @@ GMFSS 走 PyTorch 推理，光运行时就有 4.2 GB，所以没跟主包放在�
 - 显卡：NVIDIA（TensorRT 加速）/ AMD / Intel 核显（ncnn Vulkan）
 - 显存建议 4 GB 以上（超分 4K 建议 8 GB）
 
-## 开源与许可
+## 许可
 
-本项目本体（`app/` 目录下的代码）采用 [MIT License](LICENSE)，免费使用与转载，**请勿收费转卖**。
+**本软件为闭源软件，保留所有权利（All rights reserved）。**
+
+- 允许免费下载、安装并用于个人或商业项目
+- 允许在保留原始出处的前提下转载下载链接
+- **禁止**反编译、反汇编、逆向工程或提取其中的代码与资源
+- **禁止**二次打包、改名后重新发布，或用于收费转卖
+- 源代码不对外公开
 
 内嵌的第三方组件（Real-ESRGAN、Real-CUGAN、RIFE ncnn、GMFSS Fortuna（98mxr，MIT）、FFmpeg、VapourSynth、TensorRT 等）各自遵循其原始许可，著作权归原作者所有。
-
-## 开发
-
-```bash
-# 依赖
-# - Python 3.11（运行时在 runtime/py311，源码开发可自行准备）
-# - PySide6、numpy、Pillow
-
-cd app
-python main.py
-```
 
 ## 更新与公告
 

@@ -56,3 +56,14 @@ dist/
 .DS_Store
 Thumbs.db
 *.swp
+
+# ===== 闭源：源码不再纳入版本库（2026-11-05）=====
+/app/
+/installer/
+/installer_py/
+/tools/
+/命令行.bat
+/安装GMFSS组件.bat
+
+# ===== 本地备份（含源码，不入库）=====
+/_backup/
